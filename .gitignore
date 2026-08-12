@@ -1,0 +1,10 @@
+# pipeline scratch — regenerate with scripts/01 and 02
+oas/
+pages/
+all_video_models.json
+extracted.json
+priced.json
+priced2.json
+final.json
+page_pricing.json
+.DS_Store

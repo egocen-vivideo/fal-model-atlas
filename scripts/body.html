@@ -1,0 +1,54 @@
+<header class="top"><div class="wrap"><div class="mast">
+  <div class="eyebrow">fal.ai catalogue survey &middot; 13 Aug 2026</div>
+  <h1>Every video generation model on fal.ai</h1>
+  <p class="dek">All <b>332 endpoints</b> across text-to-video, image-to-video and reference-to-video &mdash; pulled from fal's live model index and each endpoint's published OpenAPI schema, with pricing normalised to <b>USD per minute of 720p output</b>. Click any row for its strongest and weakest side.</p>
+</div>
+<div class="stats" id="stats"></div>
+</div></header>
+
+<div class="rail"><div class="wrap"><div class="rail-in">
+  <label class="search">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+    <input id="q" type="search" placeholder="Search model, family or lab&hellip;" aria-label="Search models">
+  </label>
+  <div class="chips" id="typechips" role="group" aria-label="Filter by input type">
+    <button class="chip" data-type="t2v" aria-pressed="false">Text&rarr;Video</button>
+    <button class="chip" data-type="i2v" aria-pressed="false">Image&rarr;Video</button>
+    <button class="chip" data-type="ref" aria-pressed="false">Reference</button>
+  </div>
+  <div class="chips" id="capchips" role="group" aria-label="Filter by capability">
+    <button class="chip" data-cap="au" aria-pressed="false">Audio</button>
+    <button class="chip" data-cap="ls" aria-pressed="false">Lipsync</button>
+    <button class="chip" data-cap="e" aria-pressed="false">End frame</button>
+    <button class="chip" data-cap="m" aria-pressed="false">Multi-cut</button>
+  </div>
+  <div class="sel"><label for="sort">Sort</label>
+    <select id="sort">
+      <option value="fam">Family</option>
+      <option value="pa">Price &uarr; cheapest</option>
+      <option value="pd">Price &darr; dearest</option>
+      <option value="fd">Max frames &darr;</option>
+      <option value="id">Endpoint A&ndash;Z</option>
+    </select>
+  </div>
+  <span class="count" id="count"></span>
+</div></div></div>
+
+<div class="wrap">
+  <div class="scroller">
+    <table>
+      <thead><tr>
+        <th>Endpoint</th><th>Type</th><th class="num">$/min&nbsp;720p</th><th class="num">Max frames</th>
+        <th>Duration options</th><th>Quality options</th><th>Aspect ratios</th>
+        <th>Audio</th><th>Start frame</th><th>End frame</th><th>&gt;1 cut</th><th>Lipsync</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+
+<footer><div class="wrap">
+  <p><b>Method.</b> Endpoint list from fal's model index (<code>/api/models</code>, categories text-to-video + image-to-video, all pages). Duration, resolution, aspect-ratio, frame-count, audio and start/end-frame fields read from each endpoint's published <code>openapi.json</code>. Pricing from fal's own per-model pricing copy, normalised to a 60-second 720p render.</p>
+  <p><b>Read $/min as a rate, not a shopping cart.</b> Most of these models cap out at 5&ndash;15 seconds, so a full minute is not a single generation &mdash; the column exists to make wildly different billing units (per second, per video, per megapixel, per 1000 tokens) comparable. Where a model bills per megapixel or per token, 720p at the endpoint's native frame rate is assumed. Audio-on tiers cost more; the figure shown is audio-off where the two differ.</p>
+  <p><b>12 endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>
+</div></footer>
