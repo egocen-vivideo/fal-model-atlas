@@ -34,6 +34,11 @@ image-to-video, of which 27 are reference-to-video. For each one:
 | Lipsync | endpoint class + audio-driven params |
 | Strongest / weakest side | assessed per family — **judgement, not benchmark** |
 
+Every column is operable: click the Endpoint/Type/$-min/Max-frames headers to
+sort ascending or descending, filter any column through its checkbox dropdown
+(duration is enumerated as explicit seconds), and set min–max ranges on price
+and frames. All filters, ranges, the sort, and text search apply concurrently.
+
 ## How to read the price column
 
 fal bills in five incompatible units: per second, per video, per 5s-plus-extra,

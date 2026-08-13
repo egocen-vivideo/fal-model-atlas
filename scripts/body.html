@@ -6,39 +6,23 @@
 <div class="stats" id="stats"></div>
 </div></header>
 
-<div class="rail"><div class="wrap"><div class="rail-in">
-  <label class="search">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
-    <input id="q" type="search" placeholder="Search model, family or lab&hellip;" aria-label="Search models">
-  </label>
-  <div class="chips" id="typechips" role="group" aria-label="Filter by input type">
-    <button class="chip" data-type="t2v" aria-pressed="false">Text&rarr;Video</button>
-    <button class="chip" data-type="i2v" aria-pressed="false">Image&rarr;Video</button>
-    <button class="chip" data-type="ref" aria-pressed="false">Reference</button>
+<div class="rail"><div class="wrap">
+  <div class="rail-in">
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+      <input id="q" type="search" placeholder="Search model, family or lab&hellip;" aria-label="Search models">
+    </label>
+    <button class="chip" id="reset" type="button">Reset all</button>
+    <span class="count" id="count"></span>
   </div>
-  <div class="chips" id="capchips" role="group" aria-label="Filter by capability">
-    <button class="chip" data-cap="au" aria-pressed="false">Audio</button>
-    <button class="chip" data-cap="ls" aria-pressed="false">Lipsync</button>
-    <button class="chip" data-cap="e" aria-pressed="false">End frame</button>
-    <button class="chip" data-cap="m" aria-pressed="false">Multi-cut</button>
-  </div>
-  <div class="sel"><label for="sort">Sort</label>
-    <select id="sort">
-      <option value="fam">Family</option>
-      <option value="pa">Price &uarr; cheapest</option>
-      <option value="pd">Price &darr; dearest</option>
-      <option value="fd">Max frames &darr;</option>
-      <option value="id">Endpoint A&ndash;Z</option>
-    </select>
-  </div>
-  <span class="count" id="count"></span>
-</div></div></div>
+  <div class="facetbar" id="facetbar" role="group" aria-label="Column filters"></div>
+</div></div>
 
 <div class="wrap">
   <div class="scroller">
     <table>
       <thead><tr>
-        <th>Endpoint</th><th>Type</th><th class="num">$/min&nbsp;720p</th><th class="num">Max frames</th>
+        <th data-sort="fam" aria-sort="ascending">Endpoint &middot; Family</th><th data-sort="type">Type</th><th class="num" data-sort="price">$/min&nbsp;720p</th><th class="num" data-sort="frames">Max frames</th>
         <th>Duration options</th><th>Quality options</th><th>Aspect ratios</th>
         <th>Audio</th><th>Start frame</th><th>End frame</th><th>&gt;1 cut</th><th>Lipsync</th>
       </tr></thead>
