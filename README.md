@@ -6,12 +6,14 @@ matrix, so we can pick models on evidence instead of vibes.
 
 **Live table:** https://egocen-vivideo.github.io/fal-model-atlas/
 
-> ⚠️ **The Pages URL is publicly reachable.** GitHub only offers access-controlled
-> Pages on Enterprise Cloud org repos; this is a personal-account repo, so the
-> repo is private but the published site is not. It carries `noindex` and a
-> `robots.txt` deny, so it won't show up in search — but anyone with the link can
-> read it. Don't post the URL anywhere public. If that's not good enough, see
-> [Making it actually private](#making-it-actually-private).
+> ⚠️ **This repository and the published site are both public.** GitHub Pages is
+> not available on private repos on the Free plan, and access-controlled Pages
+> needs Enterprise Cloud — so public was the only way to get a working URL
+> without a plan change. The site carries `noindex` and a `robots.txt` deny, so
+> it should stay out of search results, but anyone with the link (or the repo
+> URL) can read everything here, including the model shortlist and the
+> strongest/weakest assessments. Treat it accordingly. To close that up later,
+> see [Making it actually private](#making-it-actually-private).
 
 ## What's in it
 
@@ -121,12 +123,17 @@ on disk, so re-runs are cheap.
 
 If the public URL isn't acceptable, the options are:
 
-1. **Drop Pages.** `index.html` is one self-contained file — clone the repo and
-   open it. GitHub's repo ACL becomes the only gate.
-2. **Cloudflare Pages + Access.** Connect this repo, add an Access policy for
-   `@vivideo.ai` emails. Real auth, real URL, auto-deploys on push.
-3. **GitHub Enterprise Cloud.** Move the repo to an org on Enterprise Cloud and
-   set Pages visibility to private.
+1. **Make the repo private again and drop Pages.** `index.html` is one
+   self-contained file — clone the repo and open it. GitHub's repo ACL becomes
+   the only gate. Costs nothing.
+2. **Cloudflare Pages + Access.** Free. Make the repo private again, connect it
+   to Cloudflare Pages, add an Access policy for `@vivideo.ai` emails. Real
+   auth, real URL, auto-deploys on push. This is the option to take if the
+   public URL ever becomes a problem.
+3. **GitHub Pro ($4/mo).** Repo goes back to private and Pages keeps working —
+   but the site URL stays publicly reachable. Only fixes repo exposure.
+4. **GitHub Enterprise Cloud.** Move the repo to an org on Enterprise Cloud and
+   set Pages visibility to private. The only setup where the *site* is gated.
 
 ---
 
