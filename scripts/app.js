@@ -283,12 +283,14 @@ function toggle(tr){
   if(nx && nx.classList.contains('detail')){ nx.remove(); tr.setAttribute('aria-expanded','false'); return; }
   tb.querySelectorAll('tr.detail').forEach(d=>d.remove());
   tb.querySelectorAll('tr.row[aria-expanded="true"]').forEach(d=>d.setAttribute('aria-expanded','false'));
-  const r=tb.__list[+tr.dataset.k], v=fams[r.f]||['',''];
+  const r=tb.__list[+tr.dataset.k], v=fams[r.f]||['','','',''];
   const d=document.createElement('tr');
   d.className='detail';
   d.innerHTML=`<td colspan="12"><div class="det">
     <div class="s"><h4>Strongest side</h4><p>${esc(v[0])}</p></div>
     <div class="w"><h4>Weakest side</h4><p>${esc(v[1])}</p></div>
+    <div class="us"><h4>Strongest use-cases</h4><p>${esc(v[2]||'—')}</p></div>
+    <div class="uw"><h4>Weakest use-cases</h4><p>${esc(v[3]||'—')}</p></div>
     <div class="meta">
       <span>${esc(r.pb||'no published rate')}</span>
       <a href="https://fal.ai/models/${r.i}" target="_blank" rel="noopener">open on fal.ai &nearr;</a>

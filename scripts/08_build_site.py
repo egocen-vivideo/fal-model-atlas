@@ -24,6 +24,7 @@ CSV_COLUMNS = [
     ('f_quality', 'Quality options'), ('f_aspect', 'Aspect ratios'), ('f_audio', 'Audio?'),
     ('f_start', 'Start frame?'), ('f_end', 'End frame?'), ('f_multicut', 'Multi-cut?'),
     ('f_lipsync', 'Lipsync?'), ('f_strong', 'Strongest side'), ('f_weak', 'Weakest side'),
+    ('f_use_strong', 'Strongest use-cases'), ('f_use_weak', 'Weakest use-cases'),
 ]
 
 
@@ -172,7 +173,9 @@ def _bucket(v, table):
 def build_payload(rows):
     fams = {}
     for r in rows:
-        fams.setdefault(r['family_key'], [r['f_strong'], r['f_weak']])
+        fams.setdefault(r['family_key'], [
+            r['f_strong'], r['f_weak'],
+            r.get('f_use_strong', ''), r.get('f_use_weak', '')])
     compact = [{
         'i': r['id'], 'f': r['family_key'], 'l': r['lab'] or '—',
         'c': 'ref' if r['is_ref'] else ('t2v' if r['category'] == 'text-to-video' else 'i2v'),

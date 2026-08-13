@@ -32,7 +32,8 @@ image-to-video, of which 27 are reference-to-video. For each one:
 | End frame | `end_image_url`, `tail_image_url`, `keyframes`… |
 | More than one cut | `multi_prompt`, `shot_type`, `multi_shots` |
 | Lipsync | endpoint class + audio-driven params |
-| Strongest / weakest side | assessed per family — **judgement, not benchmark** |
+| Strongest / weakest side | capability verdict per family — **judgement, not benchmark** |
+| Strongest / weakest use-cases | production-scenario verdict per family — what to reach for it for, and what to avoid |
 
 Every column is operable: click the Endpoint/Type/$-min/Max-frames headers to
 sort ascending or descending, filter any column through its checkbox dropdown
@@ -69,9 +70,12 @@ follows the driving audio or video.
 
 ## Caveats worth stating plainly
 
-- **Strongest/weakest are my assessment**, written per family from fal's
-  descriptions, endpoint docs and general knowledge of these models. They are not
-  benchmark results. Use them to shortlist, then test.
+- **Strongest/weakest sides and use-cases are my assessment**, written per
+  family. Sides describe capabilities; use-cases name production scenarios —
+  deliberately distinct research objectives. Sourced from each family's fal
+  model page (scraped Aug 2026) plus external research: Artificial Analysis
+  arena rankings, Curious Refuge reviews, vendor technical reports, and
+  practitioner write-ups. They are not benchmark results. Shortlist, then test.
 - **Prices move.** fal changes pricing without notice. Re-run the pipeline before
   making a decision that depends on a specific number.
 - **Schema ≠ behaviour.** A parameter existing in the OpenAPI schema doesn't
@@ -95,7 +99,8 @@ scripts/
   04b_price_final.py       final price engine → USD/min @720p
   05_fields.py             derive duration/quality/aspect/audio/frame/cut/lipsync
   06_known_durations.py    fill durations the schema doesn't expose
-  07_verdicts.py           strongest/weakest per family
+  07_verdicts.py           strongest/weakest side per family
+  07b_usecases.py          strongest/weakest use-cases + research-driven side revisions
   08_build_site.py         emit index.html + data exports
   head.html body.html app.js   site source
 ```
@@ -116,6 +121,7 @@ python3 $S/04b_price_final.py       # → priced2.json
 python3 $S/05_fields.py             # → final.json
 python3 $S/06_known_durations.py    # patches final.json
 python3 $S/07_verdicts.py           # patches final.json
+python3 $S/07b_usecases.py          # patches final.json
 python3 $S/08_build_site.py            # → index.html + data/
 ```
 
