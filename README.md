@@ -4,7 +4,10 @@ Every video generation endpoint on fal.ai — text-to-video, image-to-video and
 reference-to-video — with pricing normalised to a common unit and a capability
 matrix, so we can pick models on evidence instead of vibes.
 
-**Live table:** https://egocen-vivideo.github.io/fal-model-atlas/
+**Live tables:**
+- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (332 endpoints)
+- Image — https://egocen-vivideo.github.io/fal-model-atlas/image.html (587 endpoints)
+- Audio — https://egocen-vivideo.github.io/fal-model-atlas/audio.html (126 endpoints)
 
 > ⚠️ **This repository and the published site are both public.** GitHub Pages is
 > not available on private repos on the Free plan, and access-controlled Pages
@@ -85,10 +88,14 @@ follows the driving audio or video.
 ## Repo layout
 
 ```
-index.html                 the whole site — self-contained, no build, no deps
+index.html                 video atlas — self-contained, no build, no deps
+image.html audio.html      image and audio atlases, same engine, separate pages
 robots.txt                 deny-all
 data/
-  fal_video_models.csv     flat export, all 332 rows
+  fal_video_models.csv     flat export, all 332 video rows
+  fal_image_models.csv     587 image rows incl. verdicts
+  fal_audio_models.csv     126 audio rows incl. verdicts
+  image_rows.json audio_rows.json   full extracted records
   models.json              full records incl. raw pricing text and schema fields
   payload.json             compact payload the page embeds
 scripts/
@@ -102,6 +109,12 @@ scripts/
   07_verdicts.py           strongest/weakest side per family
   07b_usecases.py          strongest/weakest use-cases + research-driven side revisions
   08_build_site.py         emit index.html + data exports
+  media/                   image + audio pipeline:
+    10_fetch_catalogs.py   fal index for t2i/i2i + tts/t2a/a2a/s2s
+    11_scrape_pages.py     model pages for endpoints without pricing metadata
+    12_extract_media.py    fields + $/image@1MP and $/min normalisation + families
+    verdicts_media.py      per-family sides + use-cases (researched Aug 2026)
+    build_media.py         emit image.html + audio.html + CSVs
   head.html body.html app.js   site source
 ```
 
@@ -148,4 +161,4 @@ If the public URL isn't acceptable, the options are:
 
 ---
 
-Data current as of **13 August 2026**.
+Video data current as of **13 August 2026**; image and audio as of **18 August 2026**.

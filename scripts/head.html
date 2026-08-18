@@ -170,6 +170,17 @@ thead th[aria-sort="ascending"]{color:var(--sig)}
 thead th[aria-sort="ascending"]::after{content:"\2191";opacity:1}
 thead th[aria-sort="descending"]{color:var(--sig)}
 thead th[aria-sort="descending"]::after{content:"\2193";opacity:1}
+/* ---- atlas tabs ---- */
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tabs a{display:inline-flex;align-items:baseline;gap:7px;text-decoration:none;color:var(--muted);
+  border:1px solid var(--line);background:var(--surface);padding:7px 14px;border-radius:999px;
+  font-size:13px;font-weight:600;transition:border-color .13s,color .13s}
+.tabs a:hover{border-color:var(--sig);color:var(--ink-2)}
+.tabs a[aria-current="page"]{background:var(--sig-soft);border-color:var(--sig);color:var(--sig)}
+.tabs a .n{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.tabs a[aria-current="page"] .n{color:var(--sig)}
+.b-x4{background:var(--t5b);color:var(--t5)}
+.b-x5{background:var(--t4b);color:var(--t4)}
 footer{border-top:1px solid var(--line);padding:26px 0 46px;color:var(--faint);font-size:12.5px}
 footer p{margin:0 0 8px;max-width:78ch}
 footer code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted)}
