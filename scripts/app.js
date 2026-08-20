@@ -1,4 +1,5 @@
 const D = __PAYLOAD__;
+const MODE = __MODE__;   // 'generate' | 'repurpose'
 const rows = D.rows, fams = D.fams;
 
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -17,22 +18,34 @@ function capCell(v){
   const q=s.replace(/^Yes\s*[—\-]?\s*/,'').trim();
   return `<span class="yes">Yes</span>${q?' <span class="dim">'+esc(q)+'</span>':''}`;
 }
+const TASK_ORDER=['generate','extend','edit/restyle','inpaint/erase','lipsync','upscale/restore','interpolation','video→audio','analysis/masking','utility'];
 const TYPE={t2v:['b-t2v','T2V'],i2v:['b-i2v','I2V'],ref:['b-ref','REF'],v2v:['b-x4','V2V']};
 const TYPE_NAME={t2v:'Text→Video',i2v:'Image→Video',ref:'Reference→Video',v2v:'Video→Video'};
 
 // ---- stats strip ----
 const priced = rows.filter(r=>r.p!=null).map(r=>r.p).sort((a,b)=>a-b);
-const stats=[
+const cnt_ = (f) => String(rows.filter(f).length);
+const range_ = '$'+priced[0].toFixed(2)+'&ndash;$'+priced[priced.length-1].toFixed(0);
+const stats = MODE==='generate' ? [
   [String(rows.length),'Endpoints'],
-  ['132 / 200 / 199','T&rarr;V / I&rarr;V / V&rarr;V'],
-  [String(rows.filter(r=>r.tk==='generate').length),'Generation'],
-  [String(rows.filter(r=>r.tk&&r.tk!=='generate').length),'Edit / post / analysis'],
+  [cnt_(r=>r.c==='t2v')+' / '+cnt_(r=>r.c==='i2v'),'Text&rarr;V / Image&rarr;V'],
+  [cnt_(r=>r.c==='ref'),'Reference&rarr;V'],
   [String(new Set(rows.map(r=>r.f)).size),'Model families'],
-  [String(rows.filter(r=>r.auB==='yes').length),'Generate audio'],
-  [String(rows.filter(r=>r.lsB==='yes').length),'Do lipsync'],
-  [String(rows.filter(r=>r.eB==='y').length),'Take an end frame'],
-  [String(rows.filter(r=>r.mB==='native').length),'Multi&#8209;shot'],
-  ['$'+priced[0].toFixed(2)+'&ndash;$'+priced[priced.length-1].toFixed(0),'$/min range'],
+  [cnt_(r=>r.auB==='yes'),'Generate audio'],
+  [cnt_(r=>r.lsB==='yes'),'Do lipsync'],
+  [cnt_(r=>r.eB==='y'),'Take an end frame'],
+  [cnt_(r=>r.mB==='native'),'Multi&#8209;shot'],
+  [range_,'$/min range'],
+] : [
+  [String(rows.length),'Endpoints'],
+  [cnt_(r=>r.tk==='edit/restyle'),'Edit / restyle'],
+  [cnt_(r=>r.tk==='extend'),'Extend'],
+  [cnt_(r=>r.tk==='inpaint/erase'),'Inpaint / erase'],
+  [cnt_(r=>r.tk==='upscale/restore'),'Upscale / restore'],
+  [cnt_(r=>r.tk==='lipsync'),'Lipsync'],
+  [cnt_(r=>r.tk==='video→audio'),'Video&rarr;audio'],
+  [String(new Set(rows.map(r=>r.f)).size),'Model families'],
+  [range_,'$/min range'],
 ];
 document.getElementById('stats').innerHTML = stats
   .map(([n,k])=>`<div class="stat"><span class="n">${n}</span><span class="k">${k}</span></div>`).join('');
@@ -61,8 +74,9 @@ const orderBy = list => (a,b) => {
 
 const FACETS=[
   {id:'fam',  label:'Family',     get:r=>[r.f], search:true},
-  {id:'type', label:'Type',       get:r=>[r.c], name:t=>TYPE_NAME[t]},
-  {id:'task', label:'Task',       get:r=>[r.tk||'generate'], sort:orderBy(['generate','extend','edit/restyle','inpaint/erase','lipsync','upscale/restore','interpolation','video→audio','analysis/masking','utility'])},
+  MODE==='generate'
+    ? {id:'type', label:'Type', get:r=>[r.c], name:t=>TYPE_NAME[t]}
+    : {id:'task', label:'Task', get:r=>[r.tk||'generate'], sort:orderBy(TASK_ORDER)},
   {id:'dur',  label:'Duration',   get:r=>r.dt, sort:durSort, name:DUR_NAME, grid:true},
   {id:'qual', label:'Quality',    get:r=>r.qt, sort:orderBy(Q_ORDER)},
   {id:'ar',   label:'Aspect',     get:r=>r.at, sort:orderBy(A_ORDER)},
@@ -225,8 +239,9 @@ function sortList(list){
   };
   const cmp={
     fam:(a,b)=>a.f.localeCompare(b.f)*dir || a.i.localeCompare(b.i),
-    type:(a,b)=>(TORD[a.c]-TORD[b.c])*dir || a.i.localeCompare(b.i),
-    task:(a,b)=>((TASK_ORD[a.tk||'generate']??9)-(TASK_ORD[b.tk||'generate']??9))*dir || a.i.localeCompare(b.i),
+    col2: MODE==='generate'
+      ? (a,b)=>(TORD[a.c]-TORD[b.c])*dir || a.i.localeCompare(b.i)
+      : (a,b)=>((TASK_ORD[a.tk||'generate']??9)-(TASK_ORD[b.tk||'generate']??9))*dir || a.i.localeCompare(b.i),
     price:nullLast(r=>r.p),
     frames:nullLast(r=>r.mf),
   }[key];
@@ -249,7 +264,7 @@ function render(){
   sortList(list);
   cnt.textContent=`${list.length} of ${rows.length} endpoints`;
   if(!list.length){
-    tb.innerHTML='<tr><td colspan="13"><div class="empty">No model matches those filters.</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="12"><div class="empty">No model matches those filters.</div></td></tr>';
     tb.__list=[];
     return;
   }
@@ -258,14 +273,15 @@ function render(){
   list.forEach((r,ix)=>{
     if(grouped && r.f!==last){
       last=r.f;
-      html+=`<tr class="grp"><td colspan="13"><span class="gname">${esc(r.f)}</span><span class="glab">${esc(r.l)}</span></td></tr>`;
+      html+=`<tr class="grp"><td colspan="12"><span class="gname">${esc(r.f)}</span><span class="glab">${esc(r.l)}</span></td></tr>`;
     }
     const seg=r.i.split('/'), tail=seg.pop(), pre=seg.join('/')+'/';
     const [cls,lbl]=TYPE[r.c];
     html+=`<tr class="row" data-k="${ix}" tabindex="0" role="button" aria-expanded="false">
       <td><span class="eid"><span class="pre">${esc(pre)}</span>${esc(tail)}</span></td>
-      <td><span class="badge ${cls}">${lbl}</span></td>
-      <td class="small">${esc(r.tk||'generate')}</td>
+      <td>${MODE==='generate'
+            ? `<span class="badge ${cls}">${lbl}</span>`
+            : `<span class="small">${esc(r.tk||'generate')}</span>`}</td>
       <td class="price">${money(r.p)}</td>
       <td class="num">${r.mf?r.mf.toLocaleString():'<span class="dim">follows input</span>'}</td>
       <td class="small">${esc(r.d)}</td>
@@ -291,7 +307,7 @@ function toggle(tr){
   const r=tb.__list[+tr.dataset.k], v=fams[r.f]||['','','',''];
   const d=document.createElement('tr');
   d.className='detail';
-  d.innerHTML=`<td colspan="13"><div class="det">
+  d.innerHTML=`<td colspan="12"><div class="det">
     <div class="s"><h4>Strongest side</h4><p>${esc(v[0])}</p></div>
     <div class="w"><h4>Weakest side</h4><p>${esc(v[1])}</p></div>
     <div class="us"><h4>Strongest use-cases</h4><p>${esc(v[2]||'—')}</p></div>

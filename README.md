@@ -5,7 +5,8 @@ reference-to-video — with pricing normalised to a common unit and a capability
 matrix, so we can pick models on evidence instead of vibes.
 
 **Live tables:**
-- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (531 endpoints)
+- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (332 generation endpoints)
+- Video repurpose — https://egocen-vivideo.github.io/fal-model-atlas/repurpose.html (199 video-to-video endpoints)
 - Image — https://egocen-vivideo.github.io/fal-model-atlas/image.html (587 endpoints)
 - Audio — https://egocen-vivideo.github.io/fal-model-atlas/audio.html (126 endpoints)
 
@@ -20,12 +21,19 @@ matrix, so we can pick models on evidence instead of vibes.
 
 ## What's in it
 
-**531 endpoints** across **106 model families** — 132 text-to-video, 200
-image-to-video (27 of them reference-to-video) and 199 video-to-video. The 332
-generation endpoints are the original survey; filter **Task = generate** to get
-exactly those. Video-to-video covers extend, edit/restyle, inpaint/erase,
-lipsync, upscale/restore, interpolation, video→audio, analysis/masking and
-utilities. For each endpoint:
+**531 video endpoints across 106 model families, split over two tabs** so
+neither gets crowded:
+
+- **Video** (`index.html`) — the **332 generation** endpoints: 132 text-to-video
+  and 200 image-to-video, 27 of them reference-to-video. Second column is
+  **Type** (T2V / I2V / REF).
+- **Video repurpose** (`repurpose.html`) — the **199 video-to-video** endpoints:
+  everything that takes finished footage and changes it. Second column is
+  **Task** (extend, edit/restyle, inpaint/erase, lipsync, upscale/restore,
+  interpolation, video→audio, analysis/masking, utility).
+
+Both run the same engine and carry the same columns and verdict panels. For
+each endpoint:
 
 | Field | Source |
 | --- | --- |
@@ -93,11 +101,12 @@ follows the driving audio or video.
 ## Repo layout
 
 ```
-index.html                 video atlas — self-contained, no build, no deps
+index.html                 video generation atlas (332) — self-contained, no deps
+repurpose.html             video-to-video atlas (199), same engine
 image.html audio.html      image and audio atlases, same engine, separate pages
 robots.txt                 deny-all
 data/
-  fal_video_models.csv     flat export, all 332 video rows
+  fal_video_models.csv     flat export, all 531 video rows incl. Task column
   fal_image_models.csv     587 image rows incl. verdicts
   fal_audio_models.csv     126 audio rows incl. verdicts
   image_rows.json audio_rows.json   full extracted records
@@ -114,7 +123,7 @@ scripts/
   07_verdicts.py           strongest/weakest side per family
   07b_usecases.py          strongest/weakest use-cases + research-driven side revisions
   07c_v2v_verdicts.py      verdicts for the video-to-video families
-  08_build_site.py         emit index.html + data exports
+  08_build_site.py         emit index.html + repurpose.html + data exports
   media/                   image + audio pipeline:
     10_fetch_catalogs.py   fal index for t2i/i2i + tts/t2a/a2a/s2s
     11_scrape_pages.py     model pages for endpoints without pricing metadata
@@ -142,7 +151,7 @@ python3 $S/06_known_durations.py    # patches final.json
 python3 $S/07_verdicts.py           # patches final.json
 python3 $S/07b_usecases.py          # patches final.json
 python3 $S/07c_v2v_verdicts.py      # patches final.json
-python3 $S/08_build_site.py            # → index.html + data/
+python3 $S/08_build_site.py            # → index.html + repurpose.html + data/
 ```
 
 Then commit — Pages redeploys on push to `main`.

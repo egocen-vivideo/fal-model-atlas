@@ -200,6 +200,53 @@ def build_payload(rows):
     return {'rows': compact, 'fams': fams}
 
 
+
+TABS = """<nav class="tabs" aria-label="Atlas sections">
+<a href="./"{v}>Video <span class="n">332</span></a>
+<a href="repurpose.html"{r}>Video repurpose <span class="n">199</span></a>
+<a href="image.html"{i}>Image <span class="n">587</span></a>
+<a href="audio.html"{a}>Audio <span class="n">126</span></a>
+</nav>"""
+
+
+def tabs(cur):
+    m = {'v': '', 'r': '', 'i': '', 'a': ''}
+    m[cur] = ' aria-current="page"'
+    return TABS.format(**m)
+
+
+PAGES = {
+ 'generate': {
+   'file': 'index.html',
+   'title': 'fal.ai Video Model Atlas',
+   'h1': 'Every video generation model on fal.ai',
+   'col2th': '<th data-sort="col2">Type</th>',
+   'dek': ('All <b>332 endpoints</b> across text-to-video, image-to-video and reference-to-video '
+           '&mdash; pulled from fal\'s live model index and each endpoint\'s published OpenAPI schema, '
+           'with pricing normalised to <b>USD per minute of 720p output</b>. '
+           'Editing, upscaling and lipsync tools live on the '
+           '<a href="repurpose.html">Video repurpose</a> tab. '
+           'Click any row for its strongest/weakest side and use-cases.'),
+   'footer': """<p><b>Method.</b> Endpoint list from fal's model index (categories text-to-video + image-to-video, all pages). Duration, resolution, aspect-ratio, frame-count, audio and start/end-frame fields read from each endpoint's published <code>openapi.json</code>. Pricing from fal's own per-model pricing copy, normalised to a 60-second 720p render.</p>
+  <p><b>Read $/min as a rate, not a shopping cart.</b> Most of these models cap out at 5&ndash;15 seconds, so a full minute is not a single generation &mdash; the column exists to make wildly different billing units (per second, per video, per megapixel, per 1000 tokens) comparable. Where a model bills per megapixel or per token, 720p at the endpoint's native frame rate is assumed. Audio-on tiers cost more; the figure shown is audio-off where the two differ.</p>
+  <p><b>12 endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>""",
+ },
+ 'repurpose': {
+   'file': 'repurpose.html',
+   'title': 'fal.ai Video Repurpose Atlas',
+   'h1': 'Every video repurposing model on fal.ai',
+   'col2th': '<th data-sort="col2">Task</th>',
+   'dek': ('All <b>199 video-to-video endpoints</b> &mdash; everything that takes finished footage '
+           'and changes it: extend, edit and restyle, inpaint and erase, lipsync, upscale and restore, '
+           'interpolate, generate matching audio, or analyse. Models that create video from scratch '
+           'are on the <a href="./">Video</a> tab. Pricing is normalised to '
+           '<b>USD per minute of footage processed at 720p</b>.'),
+   'footer': """<p><b>Method.</b> Endpoint list from fal's model index (category video-to-video, all pages). Fields read from each endpoint's published <code>openapi.json</code>; pricing from fal's own copy, scraped from the model page where the metadata carries none.</p>
+  <p><b>Read $/min as a processing rate.</b> Unlike the generation tab, this is the cost to run a minute of footage through the model, not the cost to create a minute. Per-frame billing (background removal, SAM) is converted at a 30&nbsp;fps reference. Upscalers whose lowest tier is 1080p are priced at that tier and flagged in the expanded row.</p>
+  <p><b>16 endpoints</b> are billed per GPU compute-second and show as compute-billed. Many columns here describe the model's <em>output</em> envelope &mdash; for pure analysis and utility endpoints (SAM, depth, ffmpeg) several are simply not applicable.</p>""",
+ },
+}
+
 HTML_SHELL = """<!doctype html>
 <html lang="en">
 <head>
@@ -222,37 +269,51 @@ HTML_SHELL = """<!doctype html>
 
 
 def main():
-    # default to ./final.json (pipeline output in the scratch dir), else the
-    # committed copy, else an explicit path argument
     src = sys.argv[1] if len(sys.argv) > 1 else (
         'final.json' if os.path.exists('final.json')
         else os.path.join(ROOT, 'data', 'models.json'))
     print('reading', src)
-    rows = json.load(open(src))
-    payload = build_payload(rows)
+    all_rows = json.load(open(src))
 
-    with open(os.path.join(ROOT, 'data', 'payload.json'), 'w') as f:
-        json.dump(payload, f, separators=(',', ':'))
-    with open(os.path.join(ROOT, 'data', 'models.json'), 'w') as f:
-        json.dump(rows, f, indent=1)
-
+    # one CSV for everything, Task column included
     with open(os.path.join(ROOT, 'data', 'fal_video_models.csv'), 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow([c[1] for c in CSV_COLUMNS])
-        for r in sorted(rows, key=lambda x: (x['family_key'], x['id'])):
+        for r in sorted(all_rows, key=lambda x: (x.get('f_task', 'generate'), x['family_key'], x['id'])):
             w.writerow([r.get(c[0]) for c in CSV_COLUMNS])
+    with open(os.path.join(ROOT, 'data', 'models.json'), 'w') as f:
+        json.dump(all_rows, f, indent=1)
 
-    js = open(os.path.join(HERE, 'app.js')).read().replace(
-        '__PAYLOAD__', json.dumps(payload, separators=(',', ':')))
-    doc = HTML_SHELL.format(
-        head=open(os.path.join(HERE, 'head.html')).read(),
-        body=open(os.path.join(HERE, 'body.html')).read(),
-        js=js,
-    )
-    out = os.path.join(ROOT, 'index.html')
-    with open(out, 'w') as f:
-        f.write(doc)
-    print('wrote index.html — %d KB, %d endpoints' % (os.path.getsize(out) // 1024, len(rows)))
+    head_src = open(os.path.join(HERE, 'head.html')).read()
+    body_src = open(os.path.join(HERE, 'body.html')).read()
+    app_src = open(os.path.join(HERE, 'app.js')).read()
+
+    for mode, tab_key in (('generate', 'v'), ('repurpose', 'r')):
+        cfg = PAGES[mode]
+        rows = [r for r in all_rows
+                if (r.get('f_task', 'generate') == 'generate') == (mode == 'generate')]
+        payload = build_payload(rows)
+        if mode == 'generate':
+            with open(os.path.join(ROOT, 'data', 'payload.json'), 'w') as f:
+                json.dump(payload, f, separators=(',', ':'))
+
+        head = head_src.replace('<title>fal.ai Video Model Atlas</title>',
+                                f"<title>{cfg['title']}</title>")
+        body = (body_src
+                .replace('__EYEBROW__', 'fal.ai catalogue survey &middot; 20 Aug 2026')
+                .replace('__H1__', cfg['h1'])
+                .replace('__DEK__', cfg['dek'])
+                .replace('__TABS__', tabs(tab_key))
+                .replace('__COL2TH__', cfg['col2th'])
+                .replace('__FOOTER__', '<footer><div class="wrap">' + cfg['footer'] + '</div></footer>'))
+        js = (app_src
+              .replace('__PAYLOAD__', json.dumps(payload, separators=(',', ':')))
+              .replace('__MODE__', json.dumps(mode)))
+        doc = HTML_SHELL.format(head=head, body=body, js=js)
+        out = os.path.join(ROOT, cfg['file'])
+        with open(out, 'w') as f:
+            f.write(doc)
+        print(f"wrote {cfg['file']} — {os.path.getsize(out)//1024} KB, {len(rows)} endpoints")
 
 
 if __name__ == '__main__':
