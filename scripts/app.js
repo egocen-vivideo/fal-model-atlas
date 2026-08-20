@@ -17,15 +17,16 @@ function capCell(v){
   const q=s.replace(/^Yes\s*[—\-]?\s*/,'').trim();
   return `<span class="yes">Yes</span>${q?' <span class="dim">'+esc(q)+'</span>':''}`;
 }
-const TYPE={t2v:['b-t2v','T2V'],i2v:['b-i2v','I2V'],ref:['b-ref','REF']};
-const TYPE_NAME={t2v:'Text→Video',i2v:'Image→Video',ref:'Reference→Video'};
+const TYPE={t2v:['b-t2v','T2V'],i2v:['b-i2v','I2V'],ref:['b-ref','REF'],v2v:['b-x4','V2V']};
+const TYPE_NAME={t2v:'Text→Video',i2v:'Image→Video',ref:'Reference→Video',v2v:'Video→Video'};
 
 // ---- stats strip ----
 const priced = rows.filter(r=>r.p!=null).map(r=>r.p).sort((a,b)=>a-b);
 const stats=[
   [String(rows.length),'Endpoints'],
-  ['132 / 200','Text&rarr;V / Image&rarr;V'],
-  [String(rows.filter(r=>r.c==='ref').length),'Reference&rarr;V'],
+  ['132 / 200 / 199','T&rarr;V / I&rarr;V / V&rarr;V'],
+  [String(rows.filter(r=>r.tk==='generate').length),'Generation'],
+  [String(rows.filter(r=>r.tk&&r.tk!=='generate').length),'Edit / post / analysis'],
   [String(new Set(rows.map(r=>r.f)).size),'Model families'],
   [String(rows.filter(r=>r.auB==='yes').length),'Generate audio'],
   [String(rows.filter(r=>r.lsB==='yes').length),'Do lipsync'],
@@ -61,6 +62,7 @@ const orderBy = list => (a,b) => {
 const FACETS=[
   {id:'fam',  label:'Family',     get:r=>[r.f], search:true},
   {id:'type', label:'Type',       get:r=>[r.c], name:t=>TYPE_NAME[t]},
+  {id:'task', label:'Task',       get:r=>[r.tk||'generate'], sort:orderBy(['generate','extend','edit/restyle','inpaint/erase','lipsync','upscale/restore','interpolation','video→audio','analysis/masking','utility'])},
   {id:'dur',  label:'Duration',   get:r=>r.dt, sort:durSort, name:DUR_NAME, grid:true},
   {id:'qual', label:'Quality',    get:r=>r.qt, sort:orderBy(Q_ORDER)},
   {id:'ar',   label:'Aspect',     get:r=>r.at, sort:orderBy(A_ORDER)},
@@ -210,7 +212,8 @@ function match(r){
 }
 
 // ---- sorting via column headers ----
-const TORD={t2v:0,i2v:1,ref:2};
+const TASK_ORD={'generate':0,'extend':1,'edit/restyle':2,'inpaint/erase':3,'lipsync':4,'upscale/restore':5,'interpolation':6,'video→audio':7,'analysis/masking':8,'utility':9};
+const TORD={t2v:0,i2v:1,ref:2,v2v:3};
 function sortList(list){
   const {key,dir}=st.sort;
   const nullLast=(pick)=>(a,b)=>{
@@ -223,6 +226,7 @@ function sortList(list){
   const cmp={
     fam:(a,b)=>a.f.localeCompare(b.f)*dir || a.i.localeCompare(b.i),
     type:(a,b)=>(TORD[a.c]-TORD[b.c])*dir || a.i.localeCompare(b.i),
+    task:(a,b)=>((TASK_ORD[a.tk||'generate']??9)-(TASK_ORD[b.tk||'generate']??9))*dir || a.i.localeCompare(b.i),
     price:nullLast(r=>r.p),
     frames:nullLast(r=>r.mf),
   }[key];
@@ -245,7 +249,7 @@ function render(){
   sortList(list);
   cnt.textContent=`${list.length} of ${rows.length} endpoints`;
   if(!list.length){
-    tb.innerHTML='<tr><td colspan="12"><div class="empty">No model matches those filters.</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="13"><div class="empty">No model matches those filters.</div></td></tr>';
     tb.__list=[];
     return;
   }
@@ -254,13 +258,14 @@ function render(){
   list.forEach((r,ix)=>{
     if(grouped && r.f!==last){
       last=r.f;
-      html+=`<tr class="grp"><td colspan="12"><span class="gname">${esc(r.f)}</span><span class="glab">${esc(r.l)}</span></td></tr>`;
+      html+=`<tr class="grp"><td colspan="13"><span class="gname">${esc(r.f)}</span><span class="glab">${esc(r.l)}</span></td></tr>`;
     }
     const seg=r.i.split('/'), tail=seg.pop(), pre=seg.join('/')+'/';
     const [cls,lbl]=TYPE[r.c];
     html+=`<tr class="row" data-k="${ix}" tabindex="0" role="button" aria-expanded="false">
       <td><span class="eid"><span class="pre">${esc(pre)}</span>${esc(tail)}</span></td>
       <td><span class="badge ${cls}">${lbl}</span></td>
+      <td class="small">${esc(r.tk||'generate')}</td>
       <td class="price">${money(r.p)}</td>
       <td class="num">${r.mf?r.mf.toLocaleString():'<span class="dim">follows input</span>'}</td>
       <td class="small">${esc(r.d)}</td>
@@ -286,7 +291,7 @@ function toggle(tr){
   const r=tb.__list[+tr.dataset.k], v=fams[r.f]||['','','',''];
   const d=document.createElement('tr');
   d.className='detail';
-  d.innerHTML=`<td colspan="12"><div class="det">
+  d.innerHTML=`<td colspan="13"><div class="det">
     <div class="s"><h4>Strongest side</h4><p>${esc(v[0])}</p></div>
     <div class="w"><h4>Weakest side</h4><p>${esc(v[1])}</p></div>
     <div class="us"><h4>Strongest use-cases</h4><p>${esc(v[2]||'—')}</p></div>

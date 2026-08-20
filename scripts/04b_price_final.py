@@ -92,7 +92,14 @@ def compute(r, t):
     if 'per compute second' in tl:
         return None, 'billed per GPU compute-second (varies with runtime)', 'compute'
 
-    # --- megapixel (LTX 2.x) ---
+    # --- "$X per megapixel per second" (video upscalers): MP x $/MP/s x 60s,
+    #     no frame-rate multiplier (rate is already per second of video) ---
+    m = re.search(r'\$?([0-9.]+)\s*\$?\s*per megapixel per second', t, re.I)
+    if m:
+        mp = float(m.group(1).rstrip('.'))
+        return mp * MP720 * 60, f"${mp}/MP/s x 0.9216 MP x 60s (<=30fps tier)", 'exact'
+
+    # --- megapixel of generated data (LTX 2.x): per-frame area x fps ---
     m = re.search(r'\$?([0-9.]+)\s*\$?\s*per megapixel', t, re.I)
     if m:
         mp = float(m.group(1).rstrip("."))

@@ -1,9 +1,9 @@
 <header class="top"><div class="wrap"><div class="mast">
-  <div class="eyebrow">fal.ai catalogue survey &middot; 13 Aug 2026</div>
-  <h1>Every video generation model on fal.ai</h1>
-  <p class="dek">All <b>332 endpoints</b> across text-to-video, image-to-video and reference-to-video &mdash; pulled from fal's live model index and each endpoint's published OpenAPI schema, with pricing normalised to <b>USD per minute of 720p output</b>. Click any row for its strongest/weakest side and use-cases.</p>
+  <div class="eyebrow">fal.ai catalogue survey &middot; 20 Aug 2026</div>
+  <h1>Every video model on fal.ai</h1>
+  <p class="dek">All <b>531 endpoints</b> across text-to-video, image-to-video, reference-to-video and video-to-video &mdash; pulled from fal's live model index and each endpoint's published OpenAPI schema, with pricing normalised to <b>USD per minute of 720p output</b>. Filter <b>Task&nbsp;=&nbsp;generate</b> for the 332 pure generation endpoints. Click any row for its strongest/weakest side and use-cases.</p>
   <nav class="tabs" aria-label="Atlas sections">
-<a href="./" aria-current="page">Video <span class="n">332</span></a>
+<a href="./" aria-current="page">Video <span class="n">531</span></a>
 <a href="image.html">Image <span class="n">587</span></a>
 <a href="audio.html">Audio <span class="n">126</span></a>
 </nav>
@@ -27,7 +27,7 @@
   <div class="scroller">
     <table>
       <thead><tr>
-        <th data-sort="fam" aria-sort="ascending">Endpoint &middot; Family</th><th data-sort="type">Type</th><th class="num" data-sort="price">$/min&nbsp;720p</th><th class="num" data-sort="frames">Max frames</th>
+        <th data-sort="fam" aria-sort="ascending">Endpoint &middot; Family</th><th data-sort="type">Type</th><th data-sort="task">Task</th><th class="num" data-sort="price">$/min&nbsp;720p</th><th class="num" data-sort="frames">Max frames</th>
         <th>Duration options</th><th>Quality options</th><th>Aspect ratios</th>
         <th>Audio</th><th>Start frame</th><th>End frame</th><th>&gt;1 cut</th><th>Lipsync</th>
       </tr></thead>
@@ -39,5 +39,6 @@
 <footer><div class="wrap">
   <p><b>Method.</b> Endpoint list from fal's model index (<code>/api/models</code>, categories text-to-video + image-to-video, all pages). Duration, resolution, aspect-ratio, frame-count, audio and start/end-frame fields read from each endpoint's published <code>openapi.json</code>. Pricing from fal's own per-model pricing copy, normalised to a 60-second 720p render.</p>
   <p><b>Read $/min as a rate, not a shopping cart.</b> Most of these models cap out at 5&ndash;15 seconds, so a full minute is not a single generation &mdash; the column exists to make wildly different billing units (per second, per video, per megapixel, per 1000 tokens) comparable. Where a model bills per megapixel or per token, 720p at the endpoint's native frame rate is assumed. Audio-on tiers cost more; the figure shown is audio-off where the two differ.</p>
-  <p><b>12 endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>
+  <p><b>Video-to-video</b> endpoints (199 of the 531) cover extend, edit/restyle, inpaint/erase, lipsync, upscale/restore, interpolation, video&rarr;audio, analysis/masking and utilities — use the <b>Task</b> column to include or exclude them. For these, $/min is the processing rate and per-frame billing assumes 30&nbsp;fps.</p>
+  <p><b>28 endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>
 </div></footer>

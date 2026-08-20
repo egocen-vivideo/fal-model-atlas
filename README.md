@@ -5,7 +5,7 @@ reference-to-video — with pricing normalised to a common unit and a capability
 matrix, so we can pick models on evidence instead of vibes.
 
 **Live tables:**
-- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (332 endpoints)
+- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (531 endpoints)
 - Image — https://egocen-vivideo.github.io/fal-model-atlas/image.html (587 endpoints)
 - Audio — https://egocen-vivideo.github.io/fal-model-atlas/audio.html (126 endpoints)
 
@@ -20,8 +20,12 @@ matrix, so we can pick models on evidence instead of vibes.
 
 ## What's in it
 
-**332 endpoints** across **83 model families** — 132 text-to-video, 200
-image-to-video, of which 27 are reference-to-video. For each one:
+**531 endpoints** across **106 model families** — 132 text-to-video, 200
+image-to-video (27 of them reference-to-video) and 199 video-to-video. The 332
+generation endpoints are the original survey; filter **Task = generate** to get
+exactly those. Video-to-video covers extend, edit/restyle, inpaint/erase,
+lipsync, upscale/restore, interpolation, video→audio, analysis/masking and
+utilities. For each endpoint:
 
 | Field | Source |
 | --- | --- |
@@ -35,6 +39,7 @@ image-to-video, of which 27 are reference-to-video. For each one:
 | End frame | `end_image_url`, `tail_image_url`, `keyframes`… |
 | More than one cut | `multi_prompt`, `shot_type`, `multi_shots` |
 | Lipsync | endpoint class + audio-driven params |
+| Task | what the endpoint does — generate / extend / edit / upscale / lipsync / … |
 | Strongest / weakest side | capability verdict per family — **judgement, not benchmark** |
 | Strongest / weakest use-cases | production-scenario verdict per family — what to reach for it for, and what to avoid |
 
@@ -108,6 +113,7 @@ scripts/
   06_known_durations.py    fill durations the schema doesn't expose
   07_verdicts.py           strongest/weakest side per family
   07b_usecases.py          strongest/weakest use-cases + research-driven side revisions
+  07c_v2v_verdicts.py      verdicts for the video-to-video families
   08_build_site.py         emit index.html + data exports
   media/                   image + audio pipeline:
     10_fetch_catalogs.py   fal index for t2i/i2i + tts/t2a/a2a/s2s
@@ -135,6 +141,7 @@ python3 $S/05_fields.py             # → final.json
 python3 $S/06_known_durations.py    # patches final.json
 python3 $S/07_verdicts.py           # patches final.json
 python3 $S/07b_usecases.py          # patches final.json
+python3 $S/07c_v2v_verdicts.py      # patches final.json
 python3 $S/08_build_site.py            # → index.html + data/
 ```
 
@@ -161,4 +168,4 @@ If the public URL isn't acceptable, the options are:
 
 ---
 
-Video data current as of **13 August 2026**; image and audio as of **18 August 2026**.
+Video data current as of **20 August 2026**; image and audio as of **18 August 2026**.

@@ -15,7 +15,7 @@ sys.path.insert(0, HERE)
 from verdicts_media import IMAGE, AUDIO  # noqa: E402
 
 TABS = """<nav class="tabs" aria-label="Atlas sections">
-<a href="./"{v}>Video <span class="n">332</span></a>
+<a href="./"{v}>Video <span class="n">531</span></a>
 <a href="image.html"{i}>Image <span class="n">587</span></a>
 <a href="audio.html"{a}>Audio <span class="n">126</span></a>
 </nav>"""

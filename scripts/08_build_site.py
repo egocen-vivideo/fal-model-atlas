@@ -23,7 +23,8 @@ CSV_COLUMNS = [
     ('f_maxframes', 'Max frames'), ('f_duration', 'Duration options'),
     ('f_quality', 'Quality options'), ('f_aspect', 'Aspect ratios'), ('f_audio', 'Audio?'),
     ('f_start', 'Start frame?'), ('f_end', 'End frame?'), ('f_multicut', 'Multi-cut?'),
-    ('f_lipsync', 'Lipsync?'), ('f_strong', 'Strongest side'), ('f_weak', 'Weakest side'),
+    ('f_task', 'Task'), ('f_lipsync', 'Lipsync?'),
+    ('f_strong', 'Strongest side'), ('f_weak', 'Weakest side'),
     ('f_use_strong', 'Strongest use-cases'), ('f_use_weak', 'Weakest use-cases'),
 ]
 
@@ -178,7 +179,10 @@ def build_payload(rows):
             r.get('f_use_strong', ''), r.get('f_use_weak', '')])
     compact = [{
         'i': r['id'], 'f': r['family_key'], 'l': r['lab'] or '—',
-        'c': 'ref' if r['is_ref'] else ('t2v' if r['category'] == 'text-to-video' else 'i2v'),
+        'c': ('v2v' if r['category'] == 'video-to-video'
+              else 'ref' if r['is_ref']
+              else 't2v' if r['category'] == 'text-to-video' else 'i2v'),
+        'tk': r.get('f_task', 'generate'),
         'p': r['usd_per_min_720p'], 'pb': r['price_basis'],
         'mf': r['f_maxframes'],
         'd': dur_display(r),
