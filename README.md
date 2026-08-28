@@ -5,8 +5,8 @@ reference-to-video — with pricing normalised to a common unit and a capability
 matrix, so we can pick models on evidence instead of vibes.
 
 **Live tables:**
-- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (332 generation endpoints)
-- Video repurpose — https://egocen-vivideo.github.io/fal-model-atlas/repurpose.html (199 video-to-video endpoints)
+- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (363 generation endpoints)
+- Video repurpose — https://egocen-vivideo.github.io/fal-model-atlas/repurpose.html (213 video-to-video endpoints)
 - Image — https://egocen-vivideo.github.io/fal-model-atlas/image.html (587 endpoints)
 - Audio — https://egocen-vivideo.github.io/fal-model-atlas/audio.html (126 endpoints)
 
@@ -24,10 +24,10 @@ matrix, so we can pick models on evidence instead of vibes.
 **531 video endpoints across 106 model families, split over two tabs** so
 neither gets crowded:
 
-- **Video** (`index.html`) — the **332 generation** endpoints: 132 text-to-video
-  and 200 image-to-video, 27 of them reference-to-video. Second column is
+- **Video** (`index.html`) — the **363 generation** endpoints: text-to-video,
+  image-to-video, reference-to-video and audio-to-video. Second column is
   **Type** (T2V / I2V / REF).
-- **Video repurpose** (`repurpose.html`) — the **199 video-to-video** endpoints:
+- **Video repurpose** (`repurpose.html`) — the **213 video-to-video** endpoints:
   everything that takes finished footage and changes it. Second column is
   **Task** (extend, edit/restyle, inpaint/erase, lipsync, upscale/restore,
   interpolation, video→audio, analysis/masking, utility).
@@ -84,6 +84,22 @@ follows the driving audio or video.
 - **Veo 3.1** — the copy places the 4K price where a naive parse picks it up. The
   720p no-audio rate is $0.20/s → $12.00/min.
 
+## Unlisted endpoints
+
+fal's `/api/models` index does not return every deployed endpoint. **45 live
+video endpoints are missing from it**, including MiniMax **H3-Max**, **Wan 3.0**
+and **Wan 3.0 Prime**, **Gemini Omni Flash v1.1**, and the whole LTX
+**audio-to-video** family. They are discovered from fal's own
+[sitemap](https://fal.ai/sitemap-0.xml) — which lists every model page — then
+confirmed live by fetching each queue OpenAPI schema (`scripts/09_unlisted.py`).
+Five have a working schema but no public page at all; those inherit pricing from
+their sibling endpoint and are flagged `est` in `price_conf`.
+
+> ⚠️ **fal rate-limits the OpenAPI endpoint.** Probing thousands of candidates
+> at high concurrency returns near-100% false 404s. Keep concurrency ≤ 4 with
+> backoff — otherwise every "dead" result is a lie. This bit during the Aug 28
+> pass: 49 endpoints reported dead at 16 threads were all live at 4.
+
 ## Caveats worth stating plainly
 
 - **Strongest/weakest sides and use-cases are my assessment**, written per
@@ -123,6 +139,7 @@ scripts/
   07_verdicts.py           strongest/weakest side per family
   07b_usecases.py          strongest/weakest use-cases + research-driven side revisions
   07c_v2v_verdicts.py      verdicts for the video-to-video families
+  09_unlisted.py           endpoints live on fal but absent from its model index
   08_build_site.py         emit index.html + repurpose.html + data exports
   media/                   image + audio pipeline:
     10_fetch_catalogs.py   fal index for t2i/i2i + tts/t2a/a2a/s2s
@@ -151,6 +168,7 @@ python3 $S/06_known_durations.py    # patches final.json
 python3 $S/07_verdicts.py           # patches final.json
 python3 $S/07b_usecases.py          # patches final.json
 python3 $S/07c_v2v_verdicts.py      # patches final.json
+python3 $S/09_unlisted.py <work>    # merges unlisted endpoints into data/models.json
 python3 $S/08_build_site.py            # → index.html + repurpose.html + data/
 ```
 
@@ -177,4 +195,4 @@ If the public URL isn't acceptable, the options are:
 
 ---
 
-Video data current as of **20 August 2026**; image and audio as of **18 August 2026**.
+Video data current as of **28 August 2026**; image and audio as of **18 August 2026**.

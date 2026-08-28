@@ -202,8 +202,8 @@ def build_payload(rows):
 
 
 TABS = """<nav class="tabs" aria-label="Atlas sections">
-<a href="./"{v}>Video <span class="n">332</span></a>
-<a href="repurpose.html"{r}>Video repurpose <span class="n">199</span></a>
+<a href="./"{v}>Video <span class="n">363</span></a>
+<a href="repurpose.html"{r}>Video repurpose <span class="n">213</span></a>
 <a href="image.html"{i}>Image <span class="n">587</span></a>
 <a href="audio.html"{a}>Audio <span class="n">126</span></a>
 </nav>"""
@@ -221,7 +221,7 @@ PAGES = {
    'title': 'fal.ai Video Model Atlas',
    'h1': 'Every video generation model on fal.ai',
    'col2th': '<th data-sort="col2">Type</th>',
-   'dek': ('All <b>332 endpoints</b> across text-to-video, image-to-video and reference-to-video '
+   'dek': ('All <b>363 endpoints</b> across text-to-video, image-to-video, reference-to-video and audio-to-video '
            '&mdash; pulled from fal\'s live model index and each endpoint\'s published OpenAPI schema, '
            'with pricing normalised to <b>USD per minute of 720p output</b>. '
            'Editing, upscaling and lipsync tools live on the '
@@ -229,6 +229,7 @@ PAGES = {
            'Click any row for its strongest/weakest side and use-cases.'),
    'footer': """<p><b>Method.</b> Endpoint list from fal's model index (categories text-to-video + image-to-video, all pages). Duration, resolution, aspect-ratio, frame-count, audio and start/end-frame fields read from each endpoint's published <code>openapi.json</code>. Pricing from fal's own per-model pricing copy, normalised to a 60-second 720p render.</p>
   <p><b>Read $/min as a rate, not a shopping cart.</b> Most of these models cap out at 5&ndash;15 seconds, so a full minute is not a single generation &mdash; the column exists to make wildly different billing units (per second, per video, per megapixel, per 1000 tokens) comparable. Where a model bills per megapixel or per token, 720p at the endpoint's native frame rate is assumed. Audio-on tiers cost more; the figure shown is audio-off where the two differ.</p>
+  <p>Includes endpoints fal does not list in its public model index &mdash; H3-Max, Wan&nbsp;3.0, Gemini Omni Flash v1.1 and the audio-to-video family &mdash; found via fal's sitemap and confirmed live against their OpenAPI schemas.</p>
   <p><b>12 endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>""",
  },
  'repurpose': {
@@ -236,7 +237,7 @@ PAGES = {
    'title': 'fal.ai Video Repurpose Atlas',
    'h1': 'Every video repurposing model on fal.ai',
    'col2th': '<th data-sort="col2">Task</th>',
-   'dek': ('All <b>199 video-to-video endpoints</b> &mdash; everything that takes finished footage '
+   'dek': ('All <b>213 video-to-video endpoints</b> &mdash; everything that takes finished footage '
            'and changes it: extend, edit and restyle, inpaint and erase, lipsync, upscale and restore, '
            'interpolate, generate matching audio, or analyse. Models that create video from scratch '
            'are on the <a href="./">Video</a> tab. Pricing is normalised to '
