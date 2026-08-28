@@ -21,7 +21,7 @@ matrix, so we can pick models on evidence instead of vibes.
 
 ## What's in it
 
-**531 video endpoints across 106 model families, split over two tabs** so
+**576 video endpoints across 113 model families, split over two tabs** so
 neither gets crowded:
 
 - **Video** (`index.html`) — the **363 generation** endpoints: text-to-video,
@@ -117,12 +117,12 @@ their sibling endpoint and are flagged `est` in `price_conf`.
 ## Repo layout
 
 ```
-index.html                 video generation atlas (332) — self-contained, no deps
-repurpose.html             video-to-video atlas (199), same engine
+index.html                 video generation atlas (363) — self-contained, no deps
+repurpose.html             video-to-video atlas (213), same engine
 image.html audio.html      image and audio atlases, same engine, separate pages
 robots.txt                 deny-all
 data/
-  fal_video_models.csv     flat export, all 531 video rows incl. Task column
+  fal_video_models.csv     flat export, all 576 video rows incl. Task column
   fal_image_models.csv     587 image rows incl. verdicts
   fal_audio_models.csv     126 audio rows incl. verdicts
   image_rows.json audio_rows.json   full extracted records
