@@ -21,6 +21,14 @@ function capCell(v){
 const TASK_ORDER=['generate','extend','edit/restyle','inpaint/erase','lipsync','upscale/restore','interpolation','video→audio','analysis/masking','utility'];
 const TYPE={t2v:['b-t2v','T2V'],i2v:['b-i2v','I2V'],ref:['b-ref','REF'],v2v:['b-x4','V2V']};
 const TYPE_NAME={t2v:'Text→Video',i2v:'Image→Video',ref:'Reference→Video',v2v:'Video→Video'};
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate = d => d ? (+d.slice(8,10))+' '+MON[+d.slice(5,7)-1]+' '+d.slice(0,4) : '';
+const STATUS_NAME = t => ({active:'Active (listed on fal)',unlisted:'Unlisted on fal (live)',deprecated:'Deprecated on fal',retiring:'Deprecation scheduled'})[t]||t;
+function statusBadge(r){
+  if(r.st==='retiring') return ` <span class="badge stb st-ret" title="${esc(r.sn)}">retiring ${esc(fmtDate(r.rd))}</span>`;
+  if(r.st==='deprecated') return ` <span class="badge stb st-dep" title="${esc(r.sn)}">deprecated</span>`;
+  return '';
+}
 
 // ---- stats strip ----
 const priced = rows.filter(r=>r.p!=null).map(r=>r.p).sort((a,b)=>a-b);
@@ -85,6 +93,7 @@ const FACETS=[
   {id:'end',  label:'End frame',  get:r=>[r.eB], name:t=>t==='y'?'Yes':'No', sort:orderBy(['y','n'])},
   {id:'cuts', label:'>1 cut',     get:r=>[r.mB], name:t=>({native:'Native multi-shot',keyframe:'Keyframe / element chaining',no:'No — single shot'})[t], sort:orderBy(['native','keyframe','no'])},
   {id:'lips', label:'Lipsync',    get:r=>[r.lsB], name:t=>({yes:'Yes — native or dedicated',partial:'Partial',no:'No'})[t], sort:orderBy(['yes','partial','no'])},
+  {id:'stat', label:'fal status', get:r=>[r.st||'active'], name:STATUS_NAME, sort:orderBy(['active','unlisted','retiring','deprecated'])},
 ];
 FACETS.forEach(f=>{
   const set=new Set();
@@ -219,7 +228,7 @@ function match(r){
     if(hi!=null && v>hi) return false;
   }
   if(st.q){
-    const h=(r.i+' '+r.f+' '+r.l+' '+r.ds).toLowerCase();
+    const h=(r.i+' '+r.f+' '+r.l+' '+r.ds+' '+(r.st||'')).toLowerCase();
     if(!st.q.split(/\s+/).every(t=>h.includes(t))) return false;
   }
   return true;
@@ -278,7 +287,7 @@ function render(){
     const seg=r.i.split('/'), tail=seg.pop(), pre=seg.join('/')+'/';
     const [cls,lbl]=TYPE[r.c];
     html+=`<tr class="row" data-k="${ix}" tabindex="0" role="button" aria-expanded="false">
-      <td><span class="eid"><span class="pre">${esc(pre)}</span>${esc(tail)}</span></td>
+      <td><span class="eid"><span class="pre">${esc(pre)}</span>${esc(tail)}${statusBadge(r)}</span></td>
       <td>${MODE==='generate'
             ? `<span class="badge ${cls}">${lbl}</span>`
             : `<span class="small">${esc(r.tk||'generate')}</span>`}</td>
@@ -312,6 +321,7 @@ function toggle(tr){
     <div class="w"><h4>Weakest side</h4><p>${esc(v[1])}</p></div>
     <div class="us"><h4>Strongest use-cases</h4><p>${esc(v[2]||'—')}</p></div>
     <div class="uw"><h4>Weakest use-cases</h4><p>${esc(v[3]||'—')}</p></div>
+    ${r.sn?`<div class="stnote st-${esc(r.st)}">${esc(r.sn)}</div>`:''}
     <div class="meta">
       <span>${esc(r.pb||'no published rate')}</span>
       <a href="https://fal.ai/models/${r.i}" target="_blank" rel="noopener">open on fal.ai &nearr;</a>

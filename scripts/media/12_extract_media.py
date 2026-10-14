@@ -1,5 +1,11 @@
-"""Extract fields + pricing for fal image & audio endpoints."""
+"""Extract fields + pricing for fal image & audio endpoints.
+
+Reads all_<name>_models.json (10), oas2/ (10b), pages2/ (11) from the cwd.
+Writes <name>_rows.json in the cwd; build_media.py publishes them.
+"""
 import json, os, re, html, math
+
+AS_OF = '14 Oct 2026'
 
 def schema_input(d):
     sch = (d.get('components') or {}).get('schemas') or {}
@@ -53,6 +59,22 @@ def price_image(t, has_input):
     tl = t.lower()
     if 'per compute second' in tl:
         return None, 'billed per GPU compute-second', 'compute'
+    # --- Oct 2026 phrasings ---
+    # promo copy: record the regular 1 MP price (FLUX.3 launch promo ended Oct 8)
+    m = re.search(r'(?:promotional|launch rates)[^$]*?after which a 1K \(1 MP\) image will cost \$([0-9.]+)', t, re.I)
+    if m:
+        pm = re.search(r'1K \(1 MP\) image costs \$([0-9.]+)', t)
+        return F(m.group(1)), f"${m.group(1)} per 1 MP image, regular rate" + (f" (promo ${pm.group(1)})" if pm else ''), 'exact'
+    # Ideogram 4.5: "$0.03 per image with Low, $0.06 with Medium" -> mid tier
+    m = re.search(r'\$([0-9.]+)\s*per image with Low,\s*\$([0-9.]+)\s*with Medium', t, re.I) or \
+        re.search(r'\$([0-9.]+)\s*with Low,\s*\$([0-9.]+)\s*with Medium', t, re.I)
+    if m: return F(m.group(2)), f"${m.group(2)} Medium quality", 'exact'
+    # Topaz Bloom: "$0.08 per started 2 megapixels of output" -> a 1 MP image is one block
+    m = re.search(r'\$([0-9.]+)\s*per started\s*(\d+)\s*megapixels', t, re.I)
+    if m: return F(m.group(1)), f"${m.group(1)} per started {m.group(2)} MP block (1 MP = one block)", 'exact'
+    # Recraft V4 style: "cost 0.035 when a style_id is provided" (no $ sign)
+    m = re.search(r'cost\s*\$?([0-9.]+)\s*(?:per generated image\s*)?when a style_id is provided', t, re.I)
+    if m: return F(m.group(1)), f"${m.group(1)} per image with a saved style_id", 'exact'
     m = re.search(r'\$([0-9.]+)\s*(?:per|/)\s*megapixel in TURBO[^.]*?\$([0-9.]+)\s*(?:per|/)\s*megapixel in BALANCED', t, re.I)
     if m: return F(m.group(2)), f"${m.group(2)}/MP (BALANCED) x 1MP", 'exact'
     m = re.search(r'\$([0-9.]+)\s*with TURBO,?\s*\$([0-9.]+)\s*with BALANCED', t, re.I)
@@ -132,6 +154,8 @@ def price_audio(t):
 
 # ---------------- families ----------------
 IMG_FAMS = [
+ (r'blackforestlabs/flux-3', 'FLUX.3 Image'), (r'muse-image', 'Meta Muse Image'),
+ (r'marigold-v2', 'Preprocessors'),
  (r'flux-pro/kontext|flux-kontext', 'FLUX Kontext'), (r'flux-2|flux\.2', 'FLUX.2'),
  (r'flux-pro/v1\.1', 'FLUX 1.1 Pro'), (r'flux-pro', 'FLUX Pro'),
  (r'flux-krea|krea-flux|flux/krea', 'FLUX Krea'),
@@ -187,6 +211,8 @@ IMG_FAMS = [
  (r'evf-sam', 'SAM segmentation'), (r'feynobg', 'Background removal'), (r'dwpose', 'Preprocessors'),
 ]
 AUD_FAMS = [
+ (r'google/gemini-[0-9.]+-flash(-lite)?-tts', 'Gemini TTS'), (r'mureka', 'Mureka'),
+ (r'veed/clean-audio', 'VEED Clean Audio'), (r'grok-voice', 'Grok Voice'),
  (r'stable-audio', 'Stable Audio'), (r'minimax-music|minimax/music', 'MiniMax Music'),
  (r'minimax', 'MiniMax Speech'), (r'kokoro', 'Kokoro'),
  (r'elevenlabs.*sound|elevenlabs.*sfx', 'ElevenLabs SFX'), (r'elevenlabs', 'ElevenLabs'),
@@ -226,11 +252,21 @@ def build(name):
                     props = schema_input(d).get('properties', {}) or {}
                     about = (((d.get('info') or {}).get('x-fal-metadata') or {}).get('about') or '')[:1200]
             except Exception: pass
-        ptext = (meta.get('pricingInfoOverride') or '').strip() or page_pricing(eid)
+        ptext = (meta.get('pricingInfoOverride') or '').strip()
+        if ptext in ('$undefined', 'undefined'):     # unlisted/deprecated page records
+            ptext = ''
+        ptext = ptext or page_pricing(eid)
         cats = meta.get('_cats') or []
         r = {'id': eid, 'title': meta.get('title'), 'lab': meta.get('modelLab'),
              'cats': cats, 'desc': (meta.get('shortDescription') or '').strip(),
              'about': about, 'price_text': ptext, 'props': sorted(props.keys())}
+        # lifecycle status (see ../08_build_site.py apply_status for the contract)
+        r['status'] = ('deprecated' if meta.get('deprecated') else
+                       'unlisted' if meta.get('_unlisted') else 'active')
+        r['status_note'] = {
+            'deprecated': "fal marks this endpoint deprecated and hides it from its index; still callable as of " + AS_OF + ".",
+            'unlisted': "Not in fal's public model index; live (model page) as of " + AS_OF + ".",
+        }.get(r['status'], '')
         if name == 'image':
             has_in = any(k in props for k in ('image_url', 'image_urls'))
             r['type'] = ('both' if ('text-to-image' in cats and 'image-to-image' in cats)
@@ -263,7 +299,7 @@ def build(name):
             r['batch'] = int(bhi) if bhi else 1
         else:
             txt = (eid + ' ' + r['desc']).lower()
-            if 'text-to-speech' in cats or re.search(r'tts|speech', eid):
+            if 'text-to-speech' in cats or re.search(r'tts|speech|podcast', eid):
                 ty = 'tts'
             elif 'speech-to-speech' in cats: ty = 's2s'
             elif 'audio-to-audio' in cats and 'text-to-audio' not in cats:

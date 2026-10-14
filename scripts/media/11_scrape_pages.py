@@ -1,9 +1,10 @@
 import json, os, urllib.request, concurrent.futures as cf, collections
+os.makedirs('pages2', exist_ok=True)
 need=[]
 for name in ('image','audio'):
     cat=json.load(open(f'all_{name}_models.json'))
     for eid, meta in cat.items():
-        if not (meta.get('pricingInfoOverride') or '').strip():
+        if (meta.get('pricingInfoOverride') or '').strip() in ('', '$undefined', 'undefined'):
             need.append(eid)
 def get(eid):
     p=os.path.join('pages2', eid.replace('/','__')+'.html')
@@ -14,7 +15,7 @@ def get(eid):
         open(p,'wb').write(b); return eid,'ok'
     except Exception as e: return eid,'ERR '+str(e)[:40]
 res=[]
-with cf.ThreadPoolExecutor(10) as ex:
+with cf.ThreadPoolExecutor(4) as ex:
     for r in ex.map(get, need): res.append(r)
 print(collections.Counter(s.split()[0] for _,s in res))
 errs=[i for i,s in res if s.startswith('ERR')]

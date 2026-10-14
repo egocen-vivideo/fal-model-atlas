@@ -24,6 +24,7 @@ CSV_COLUMNS = [
     ('f_quality', 'Quality options'), ('f_aspect', 'Aspect ratios'), ('f_audio', 'Audio?'),
     ('f_start', 'Start frame?'), ('f_end', 'End frame?'), ('f_multicut', 'Multi-cut?'),
     ('f_task', 'Task'), ('f_lipsync', 'Lipsync?'),
+    ('f_status', 'fal status'), ('f_status_note', 'Status note'),
     ('f_strong', 'Strongest side'), ('f_weak', 'Weakest side'),
     ('f_use_strong', 'Strongest use-cases'), ('f_use_weak', 'Weakest use-cases'),
 ]
@@ -190,6 +191,8 @@ def build_payload(rows):
         'a': ', '.join(str(x) for x in r['ar_enum']) if r.get('ar_enum') else r['f_aspect'],
         'au': r['f_audio'], 's': r['f_start'], 'e': r['f_end'], 'm': r['f_multicut'],
         'ls': r['f_lipsync'], 'ds': r['desc'][:200],
+        'st': r.get('f_status', 'active'), 'sn': r.get('f_status_note', ''),
+        'rd': r.get('f_retire_date'),
         'dt': dur_tokens(r), 'qt': qual_tokens(r), 'at': ar_tokens(r),
         'auB': _bucket(r['f_audio'], [('Yes', 'yes'), ('Input', 'input'), ('', 'no')]),
         'sB': _bucket(r['f_start'], [('Yes', 'y'), ('', 'n')]),
@@ -202,17 +205,62 @@ def build_payload(rows):
 
 
 TABS = """<nav class="tabs" aria-label="Atlas sections">
-<a href="./"{v}>Video <span class="n">363</span></a>
-<a href="repurpose.html"{r}>Video repurpose <span class="n">213</span></a>
-<a href="image.html"{i}>Image <span class="n">587</span></a>
-<a href="audio.html"{a}>Audio <span class="n">126</span></a>
+<a href="./"{v}>Video <span class="n">{nv}</span></a>
+<a href="repurpose.html"{r}>Video repurpose <span class="n">{nr}</span></a>
+<a href="image.html"{i}>Image <span class="n">{ni}</span></a>
+<a href="audio.html"{a}>Audio <span class="n">{na}</span></a>
 </nav>"""
+
+AS_OF = '14 Oct 2026'
+COUNTS = {}
+
+
+def media_count(name):
+    p = os.path.join(ROOT, 'data', f'{name}_rows.json')
+    return len(json.load(open(p))) if os.path.exists(p) else 0
+
+
+# --------------------------------------------------------------------------
+# Lifecycle status. fal hides deprecated endpoints from its model index but
+# keeps them callable, and publishes scheduled deprecations as
+# `endpoint_messages` on every model page (09_unlisted.py saves them to
+# endpoint_messages.json). Every row gets f_status:
+#   active      listed in fal's model index
+#   unlisted    live (schema + page) but not in the index
+#   deprecated  fal marks it deprecated; still callable
+#   retiring    fal has announced a deprecation date (f_retire_date)
+# Endpoints whose schema and page are gone are dropped upstream, not flagged.
+# --------------------------------------------------------------------------
+MONTHS = {m: i for i, m in enumerate(
+    ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+     'september', 'october', 'november', 'december'], 1)}
+
+
+def apply_status(rows, msgs):
+    for r in rows:
+        st, note, date = ('unlisted' if r.get('unlisted') else 'active'), '', None
+        if st == 'unlisted':
+            note = 'Not in fal\'s public model index; live (schema + model page) as of ' + AS_OF + '.'
+        if r.get('fal_deprecated'):
+            st, note = 'deprecated', ('fal marks this endpoint deprecated and hides it from its index; '
+                                      'still callable as of ' + AS_OF + '.')
+        for m in msgs:
+            hit = (r['id'] == m['value'] if m['rule'] == 'exact_match'
+                   else r['id'].startswith(m['value']))
+            if not hit:
+                continue
+            d = re.search(r'(\w+) (\d{1,2}), (\d{4})', m['message'])
+            if d and d.group(1).lower() in MONTHS:
+                date = f"{d.group(3)}-{MONTHS[d.group(1).lower()]:02d}-{int(d.group(2)):02d}"
+            st, note = 'retiring', 'fal notice: ' + m['message']
+        r['f_status'], r['f_status_note'], r['f_retire_date'] = st, note, date
+    return rows
 
 
 def tabs(cur):
     m = {'v': '', 'r': '', 'i': '', 'a': ''}
     m[cur] = ' aria-current="page"'
-    return TABS.format(**m)
+    return TABS.format(**m, **COUNTS)
 
 
 PAGES = {
@@ -221,7 +269,7 @@ PAGES = {
    'title': 'fal.ai Video Model Atlas',
    'h1': 'Every video generation model on fal.ai',
    'col2th': '<th data-sort="col2">Type</th>',
-   'dek': ('All <b>363 endpoints</b> across text-to-video, image-to-video, reference-to-video and audio-to-video '
+   'dek': ('All <b>__N__ endpoints</b> across text-to-video, image-to-video, reference-to-video and audio-to-video '
            '&mdash; pulled from fal\'s live model index and each endpoint\'s published OpenAPI schema, '
            'with pricing normalised to <b>USD per minute of 720p output</b>. '
            'Editing, upscaling and lipsync tools live on the '
@@ -229,22 +277,23 @@ PAGES = {
            'Click any row for its strongest/weakest side and use-cases.'),
    'footer': """<p><b>Method.</b> Endpoint list from fal's model index (categories text-to-video + image-to-video, all pages). Duration, resolution, aspect-ratio, frame-count, audio and start/end-frame fields read from each endpoint's published <code>openapi.json</code>. Pricing from fal's own per-model pricing copy, normalised to a 60-second 720p render.</p>
   <p><b>Read $/min as a rate, not a shopping cart.</b> Most of these models cap out at 5&ndash;15 seconds, so a full minute is not a single generation &mdash; the column exists to make wildly different billing units (per second, per video, per megapixel, per 1000 tokens) comparable. Where a model bills per megapixel or per token, 720p at the endpoint's native frame rate is assumed. Audio-on tiers cost more; the figure shown is audio-off where the two differ.</p>
-  <p>Includes endpoints fal does not list in its public model index &mdash; H3-Max, Wan&nbsp;3.0, Gemini Omni Flash v1.1 and the audio-to-video family &mdash; found via fal's sitemap and confirmed live against their OpenAPI schemas.</p>
-  <p><b>12 endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>""",
+  <p><b>Lifecycle.</b> Includes endpoints fal no longer lists in its public model index but still serves &mdash; the whole Veo&nbsp;3.1 family (unlisted since Sep 2026), plus deprecated Kling&nbsp;1.x&ndash;2.1, Veo&nbsp;3, Luma Ray&nbsp;2 and LTX-2&nbsp;19B endpoints &mdash; each confirmed live against its OpenAPI schema and model page. The <b>fal status</b> filter separates them: <b>__NRET__</b> endpoints carry a dated deprecation notice from fal (Veo&nbsp;3.1 on 17&nbsp;Nov&nbsp;2026, Luma Ray&nbsp;2 on 25&nbsp;Oct&nbsp;2026) and <b>__NDEP__</b> are already marked deprecated. Sora&nbsp;2 is gone: OpenAI removed the Sora API on 24&nbsp;Sep&nbsp;2026 and fal's endpoints no longer resolve.</p>
+  <p><b>Promotional prices</b> are recorded at the regular rate fal says applies afterwards (MiniMax H3-Max / H3-Max Turbo promo ends 15&nbsp;Oct; Vidu&nbsp;Q4 promo ends 30&nbsp;Nov); the promo rate and end date are in the expanded row.</p>
+  <p><b>__NC__ endpoints</b> are billed per GPU compute-second rather than per output, so no fixed rate exists &mdash; these are the legacy open models (SVD, AnimateDiff, SadTalker, MuseTalk, LivePortrait, T2V-Turbo and friends). <b>Max frames</b> is blank where output length simply follows the driving audio or video.</p>""",
  },
  'repurpose': {
    'file': 'repurpose.html',
    'title': 'fal.ai Video Repurpose Atlas',
    'h1': 'Every video repurposing model on fal.ai',
    'col2th': '<th data-sort="col2">Task</th>',
-   'dek': ('All <b>213 video-to-video endpoints</b> &mdash; everything that takes finished footage '
+   'dek': ('All <b>__N__ video-to-video endpoints</b> &mdash; everything that takes finished footage '
            'and changes it: extend, edit and restyle, inpaint and erase, lipsync, upscale and restore, '
            'interpolate, generate matching audio, or analyse. Models that create video from scratch '
            'are on the <a href="./">Video</a> tab. Pricing is normalised to '
            '<b>USD per minute of footage processed at 720p</b>.'),
    'footer': """<p><b>Method.</b> Endpoint list from fal's model index (category video-to-video, all pages). Fields read from each endpoint's published <code>openapi.json</code>; pricing from fal's own copy, scraped from the model page where the metadata carries none.</p>
   <p><b>Read $/min as a processing rate.</b> Unlike the generation tab, this is the cost to run a minute of footage through the model, not the cost to create a minute. Per-frame billing (background removal, SAM) is converted at a 30&nbsp;fps reference. Upscalers whose lowest tier is 1080p are priced at that tier and flagged in the expanded row.</p>
-  <p><b>16 endpoints</b> are billed per GPU compute-second and show as compute-billed. Many columns here describe the model's <em>output</em> envelope &mdash; for pure analysis and utility endpoints (SAM, depth, ffmpeg) several are simply not applicable.</p>""",
+  <p><b>__NC__ endpoints</b> are billed per GPU compute-second and show as compute-billed. <b>__NRET__</b> carry a dated fal deprecation notice (Luma Ray&nbsp;2 modify/reframe on 25&nbsp;Oct, Veo&nbsp;3.1 extend on 17&nbsp;Nov, Lucy Edit Pro on 22&nbsp;Oct) &mdash; see the <b>fal status</b> filter. Many columns here describe the model's <em>output</em> envelope &mdash; for pure analysis and utility endpoints (SAM, depth, ffmpeg) several are simply not applicable.</p>""",
  },
 }
 
@@ -275,6 +324,14 @@ def main():
         else os.path.join(ROOT, 'data', 'models.json'))
     print('reading', src)
     all_rows = json.load(open(src))
+    msgs = json.load(open('endpoint_messages.json')) if os.path.exists('endpoint_messages.json') else []
+    apply_status(all_rows, msgs)
+    COUNTS.update(
+        nv=sum(1 for r in all_rows if r.get('f_task', 'generate') == 'generate'),
+        nr=sum(1 for r in all_rows if r.get('f_task', 'generate') != 'generate'),
+        ni=media_count('image'), na=media_count('audio'))
+    print('status:', {k: sum(1 for r in all_rows if r['f_status'] == k)
+                      for k in ('active', 'unlisted', 'deprecated', 'retiring')})
 
     # one CSV for everything, Task column included
     with open(os.path.join(ROOT, 'data', 'fal_video_models.csv'), 'w', newline='') as f:
@@ -301,12 +358,16 @@ def main():
         head = head_src.replace('<title>fal.ai Video Model Atlas</title>',
                                 f"<title>{cfg['title']}</title>")
         body = (body_src
-                .replace('__EYEBROW__', 'fal.ai catalogue survey &middot; 20 Aug 2026')
+                .replace('__EYEBROW__', 'fal.ai catalogue survey &middot; ' + AS_OF)
                 .replace('__H1__', cfg['h1'])
-                .replace('__DEK__', cfg['dek'])
+                .replace('__DEK__', cfg['dek'].replace('__N__', str(len(rows))))
                 .replace('__TABS__', tabs(tab_key))
                 .replace('__COL2TH__', cfg['col2th'])
-                .replace('__FOOTER__', '<footer><div class="wrap">' + cfg['footer'] + '</div></footer>'))
+                .replace('__FOOTER__', '<footer><div class="wrap">' + cfg['footer']
+                         .replace('__NC__', str(sum(1 for r in rows if r.get('price_conf') == 'compute')))
+                         .replace('__NRET__', str(sum(1 for r in rows if r.get('f_status') == 'retiring')))
+                         .replace('__NDEP__', str(sum(1 for r in rows if r.get('f_status') == 'deprecated')))
+                         + '</div></footer>'))
         js = (app_src
               .replace('__PAYLOAD__', json.dumps(payload, separators=(',', ':')))
               .replace('__MODE__', json.dumps(mode)))

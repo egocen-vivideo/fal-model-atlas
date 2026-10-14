@@ -8,3 +8,4 @@ priced2.json
 final.json
 page_pricing.json
 .DS_Store
+__pycache__/

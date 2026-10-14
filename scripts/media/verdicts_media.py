@@ -241,6 +241,17 @@ IMAGE = {
                          "Not aesthetic.", "Robotics/AV data.", "Creative work."),
  'GPT Image ': None,  # guard against trailing-space dupes
 }
+# Oct 14 2026 refresh — sources: fal model pages / descriptions (fetched 2026-10-14)
+IMAGE.update({
+ 'FLUX.3 Image': ("BFL's newest image line: native 2K and 4K output, precise layout control and improved text rendering; the edit endpoint makes local edits without disturbing the rest and blends up to 10 references.",
+                  "$0.048 per 1 MP at the regular rate (the 50% launch promo ended Oct 8) — double FLUX.2's entry tier; brand new, so little independent evaluation yet.",
+                  "Layout-precise key visuals, posters with real typography, 4K masters, multi-reference composites.",
+                  "Bulk drafts where FLUX.2 / Z-Image cost a fraction; workflows built around FLUX.1 LoRAs."),
+ 'Meta Muse Image': ("Meta's Muse Image: faithful instruction-following with accurate fine detail — text, plots and QR codes — and an edit mode that changes only what is asked, stays coherent across turns and composes multiple references; $0.01 per image.",
+                     "New on fal with no independent evaluation found; output size and aspect controls are thinner than the FLUX / Seedream lines.",
+                     "Cheap infographic-, chart- and QR-bearing images, conversational multi-turn editing, high-volume variants.",
+                     "Hero art direction where an established model's look is already approved."),
+})
 IMAGE = {k: v for k, v in IMAGE.items() if v}
 
 AUDIO = {
@@ -348,4 +359,19 @@ AUDIO = {
  'DeepFilterNet': ("Real-time speech denoising.",
                    "Denoise only.", "Podcast/call cleanup.", "Generation."),
 }
+# Oct 14 2026 refresh — sources: fal model pages / descriptions (fetched 2026-10-14)
+AUDIO.update({
+ 'Mureka': ("Song generation from a prompt or supplied lyrics with style, vocal, reference-audio and melody controls, an instrumental mode, and a multi-speaker podcast mode; flat $0.225 per song request on the top model tier.",
+            "Per-request billing with no stated clip length, so $/min cannot be normalised; no independent quality evaluation found.",
+            "Full vocal songs from lyrics, jingle and demo drafts, scripted two-voice podcast audio.",
+            "Frame-accurate scoring to picture, SFX."),
+ 'VEED Clean Audio': ("The noise-removal model behind VEED's editor: MossFormer2 speech enhancement at 48 kHz plus a speech-gated floor that keeps quiet words, presence EQ and loudness normalisation — $0.0125 per input minute.",
+                      "Speech cleanup only; it does not separate music or rebuild damaged audio.",
+                      "Cleaning UGC, podcast and interview recordings before dubbing, captioning or lipsync.",
+                      "Music stems, creative sound design."),
+ 'Grok Voice': ("xAI's Grok voice agent on fal: a realtime bidirectional WebSocket endpoint and a one-shot endpoint that returns the spoken reply plus transcript.",
+                "An agent, not a TTS: it answers rather than reads your script; per-second billing runs for the whole session.",
+                "Voice assistants, phone agents, interactive characters.",
+                "Narration or dubbing of fixed scripts (use a TTS family)."),
+})
 AUDIO = {k: v for k, v in AUDIO.items() if v}

@@ -5,10 +5,10 @@ reference-to-video — with pricing normalised to a common unit and a capability
 matrix, so we can pick models on evidence instead of vibes.
 
 **Live tables:**
-- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (363 generation endpoints)
-- Video repurpose — https://egocen-vivideo.github.io/fal-model-atlas/repurpose.html (213 video-to-video endpoints)
-- Image — https://egocen-vivideo.github.io/fal-model-atlas/image.html (587 endpoints)
-- Audio — https://egocen-vivideo.github.io/fal-model-atlas/audio.html (126 endpoints)
+- Video — https://egocen-vivideo.github.io/fal-model-atlas/ (403 generation endpoints)
+- Video repurpose — https://egocen-vivideo.github.io/fal-model-atlas/repurpose.html (232 video-to-video endpoints)
+- Image — https://egocen-vivideo.github.io/fal-model-atlas/image.html (612 endpoints)
+- Audio — https://egocen-vivideo.github.io/fal-model-atlas/audio.html (139 endpoints)
 
 > ⚠️ **This repository and the published site are both public.** GitHub Pages is
 > not available on private repos on the Free plan, and access-controlled Pages
@@ -21,13 +21,13 @@ matrix, so we can pick models on evidence instead of vibes.
 
 ## What's in it
 
-**576 video endpoints across 113 model families, split over two tabs** so
+**635 video endpoints across 126 model families, split over two tabs** so
 neither gets crowded:
 
-- **Video** (`index.html`) — the **363 generation** endpoints: text-to-video,
+- **Video** (`index.html`) — the **403 generation** endpoints: text-to-video,
   image-to-video, reference-to-video and audio-to-video. Second column is
   **Type** (T2V / I2V / REF).
-- **Video repurpose** (`repurpose.html`) — the **213 video-to-video** endpoints:
+- **Video repurpose** (`repurpose.html`) — the **232 video-to-video** endpoints:
   everything that takes finished footage and changes it. Second column is
   **Task** (extend, edit/restyle, inpaint/erase, lipsync, upscale/restore,
   interpolation, video→audio, analysis/masking, utility).
@@ -47,6 +47,7 @@ each endpoint:
 | End frame | `end_image_url`, `tail_image_url`, `keyframes`… |
 | More than one cut | `multi_prompt`, `shot_type`, `multi_shots` |
 | Lipsync | endpoint class + audio-driven params |
+| fal status | active / unlisted / deprecated / retiring (dated fal notice) — see below |
 | Task | what the endpoint does — generate / extend / edit / upscale / lipsync / … |
 | Strongest / weakest side | capability verdict per family — **judgement, not benchmark** |
 | Strongest / weakest use-cases | production-scenario verdict per family — what to reach for it for, and what to avoid |
@@ -84,29 +85,54 @@ follows the driving audio or video.
 - **Veo 3.1** — the copy places the 4K price where a naive parse picks it up. The
   720p no-audio rate is $0.20/s → $12.00/min.
 
-## Unlisted endpoints
+## Unlisted, deprecated and retiring endpoints
 
-fal's `/api/models` index does not return every deployed endpoint. **45 live
-video endpoints are missing from it**, including MiniMax **H3-Max**, **Wan 3.0**
-and **Wan 3.0 Prime**, **Gemini Omni Flash v1.1**, and the whole LTX
-**audio-to-video** family. They are discovered from fal's own
-[sitemap](https://fal.ai/sitemap-0.xml) — which lists every model page — then
-confirmed live by fetching each queue OpenAPI schema (`scripts/09_unlisted.py`).
-Five have a working schema but no public page at all; those inherit pricing from
-their sibling endpoint and are flagged `est` in `price_conf`.
+fal's `/api/models` index does not return every endpoint it serves. Since
+September 2026 it hides the **whole Veo 3.1 family** (`status: unlisted`) and
+everything it marks **deprecated** (Kling 1.x / 2.0 / 2.1, Veo 3), yet those
+endpoints still have a model page and a working queue schema. The sitemap no
+longer helps — `sitemap-0.xml` is gone and `sitemap.xml` mirrors the index — so
+`scripts/09_unlisted.py` now discovers them by (1) re-checking every endpoint
+the atlas carried before, (2) probing sibling paths of fast-moving families,
+and (3) reading the sibling records embedded in each model page. Each candidate
+is confirmed live against its OpenAPI schema, and its page's embedded model
+record supplies title, category, pricing copy and status.
+
+Every row carries a **fal status** (filterable, and badged in the table):
+
+- **active** — listed in fal's index.
+- **unlisted** — live, not in the index (31 video rows).
+- **deprecated** — fal marks it deprecated; still callable (20 video rows: Kling
+  1.x–2.1, Veo 3).
+- **retiring** — fal publishes a dated notice (`endpoint_messages` on every
+  model page): **Veo 3.1, all 14 endpoints, deprecated on 17 Nov 2026**; Luma
+  Ray 2 / Ray 2 Flash (8) on 25 Oct 2026; Decart Lucy Edit Pro on 22 Oct 2026.
+
+Endpoints whose schema and page are gone are **dropped**, not flagged. This
+pass dropped `alibaba/happy-oyster` (video) and Reve 2.1 ×3 (image). **Sora 2**
+was never in the atlas; OpenAI removed the Sora API on 24 Sep 2026 and fal's
+`sora-2` endpoints no longer resolve.
 
 > ⚠️ **fal rate-limits the OpenAPI endpoint.** Probing thousands of candidates
-> at high concurrency returns near-100% false 404s. Keep concurrency ≤ 4 with
+> at high concurrency returns near-100% false 404s. Keep concurrency ≤ 3 with
 > backoff — otherwise every "dead" result is a lie. This bit during the Aug 28
 > pass: 49 endpoints reported dead at 16 threads were all live at 4.
+
+## Promotional prices
+
+Where fal's copy states a promo and the price that applies afterwards, the table
+records the **regular** rate and the expanded row names the promo rate and its
+end date: MiniMax H3-Max / H3-Max Turbo (40% off until 15 Oct 2026 →
+$0.08 / $0.04 per second at 768p), Vidu Q4 (30% off until 30 Nov 2026 →
+$0.095/s at 720p), FLUX.3 image (launch promo ended 8 Oct → $0.048 per 1 MP).
 
 ## Caveats worth stating plainly
 
 - **Strongest/weakest sides and use-cases are my assessment**, written per
   family. Sides describe capabilities; use-cases name production scenarios —
   deliberately distinct research objectives. Sourced from each family's fal
-  model page (scraped Aug 2026) plus external research: Artificial Analysis
-  arena rankings, Curious Refuge reviews, vendor technical reports, and
+  model page (scraped Aug 2026, refreshed Oct 2026) plus external research:
+  Artificial Analysis arena rankings (Sept 2026 refresh), Curious Refuge reviews, vendor technical reports, and
   practitioner write-ups. They are not benchmark results. Shortlist, then test.
 - **Prices move.** fal changes pricing without notice. Re-run the pipeline before
   making a decision that depends on a specific number.
@@ -117,14 +143,14 @@ their sibling endpoint and are flagged `est` in `price_conf`.
 ## Repo layout
 
 ```
-index.html                 video generation atlas (363) — self-contained, no deps
-repurpose.html             video-to-video atlas (213), same engine
+index.html                 video generation atlas (403) — self-contained, no deps
+repurpose.html             video-to-video atlas (232), same engine
 image.html audio.html      image and audio atlases, same engine, separate pages
 robots.txt                 deny-all
 data/
-  fal_video_models.csv     flat export, all 576 video rows incl. Task column
-  fal_image_models.csv     587 image rows incl. verdicts
-  fal_audio_models.csv     126 audio rows incl. verdicts
+  fal_video_models.csv     flat export, all 635 video rows incl. Task + fal status
+  fal_image_models.csv     612 image rows incl. verdicts
+  fal_audio_models.csv     139 audio rows incl. verdicts
   image_rows.json audio_rows.json   full extracted records
   models.json              full records incl. raw pricing text and schema fields
   payload.json             compact payload the page embeds
@@ -136,16 +162,18 @@ scripts/
   04b_price_final.py       final price engine → USD/min @720p
   05_fields.py             derive duration/quality/aspect/audio/frame/cut/lipsync
   06_known_durations.py    fill durations the schema doesn't expose
+  06b_families.py          family + Task per endpoint (carried from data/, rules for new ids)
   07_verdicts.py           strongest/weakest side per family
   07b_usecases.py          strongest/weakest use-cases + research-driven side revisions
-  07c_v2v_verdicts.py      verdicts for the video-to-video families
-  09_unlisted.py           endpoints live on fal but absent from its model index
+  07c_v2v_verdicts.py      verdicts for families added after the first pass (+ Oct revisions)
+  09_unlisted.py           endpoints live on fal but absent from its index (runs after 01)
   08_build_site.py         emit index.html + repurpose.html + data exports
   media/                   image + audio pipeline:
-    10_fetch_catalogs.py   fal index for t2i/i2i + tts/t2a/a2a/s2s
+    10_fetch_catalogs.py   fal index for t2i/i2i + tts/t2a/a2a/s2s (+ re-check dropped ids)
+    10b_fetch_schemas.py   queue OpenAPI schemas → oas2/
     11_scrape_pages.py     model pages for endpoints without pricing metadata
     12_extract_media.py    fields + $/image@1MP and $/min normalisation + families
-    verdicts_media.py      per-family sides + use-cases (researched Aug 2026)
+    verdicts_media.py      per-family sides + use-cases (Aug 2026, Oct 2026 additions)
     build_media.py         emit image.html + audio.html + CSVs
   head.html body.html app.js   site source
 ```
@@ -153,29 +181,45 @@ scripts/
 ## Refreshing the data
 
 The pipeline scripts read and write in the current directory, so run them from a
-scratch working dir:
+scratch working dir. Order matters — `09` runs straight after `01` (it appends
+unlisted endpoints to the catalog so every later step treats them like listed
+ones):
 
 ```bash
-mkdir -p /tmp/atlas && cd /tmp/atlas
+mkdir -p /tmp/atlas/video /tmp/atlas/media
 S=/path/to/fal-model-atlas/scripts
-python3 $S/01_fetch_catalog.py      # → all_video_models.json
+
+# image + audio first (08 reads their row counts for the tab bar)
+cd /tmp/atlas/media
+python3 $S/media/10_fetch_catalogs.py   # → all_image_models.json, all_audio_models.json (+ re-checks dropped ids)
+python3 $S/media/10b_fetch_schemas.py   # → oas2/
+python3 $S/media/11_scrape_pages.py     # → pages2/ (pricing copy where metadata has none)
+python3 $S/media/12_extract_media.py    # → image_rows.json, audio_rows.json
+python3 $S/media/build_media.py .       # → image.html + audio.html + data/
+
+# video
+cd /tmp/atlas/video
+python3 $S/01_fetch_catalog.py      # → all_video_models.json (t2v, i2v, v2v + audio-to-video, video-to-audio, video-to-text)
+python3 $S/09_unlisted.py           # → appends live-but-unlisted endpoints; endpoint_messages.json
 python3 $S/02_fetch_schemas.py      # → oas/, pages/, page_pricing.json
 python3 $S/03_extract.py            # → extracted.json
 python3 $S/04a_price_pass1.py       # → priced.json
 python3 $S/04b_price_final.py       # → priced2.json
 python3 $S/05_fields.py             # → final.json
 python3 $S/06_known_durations.py    # patches final.json
+python3 $S/06b_families.py          # patches final.json: family_key + Task
 python3 $S/07_verdicts.py           # patches final.json
 python3 $S/07b_usecases.py          # patches final.json
 python3 $S/07c_v2v_verdicts.py      # patches final.json
-python3 $S/09_unlisted.py <work>    # merges unlisted endpoints into data/models.json
-python3 $S/08_build_site.py            # → index.html + repurpose.html + data/
+python3 $S/08_build_site.py         # → index.html + repurpose.html + data/
+cd ../media && python3 $S/media/build_media.py .   # refresh the tab counts on image/audio
 ```
 
 Then commit — Pages redeploys on push to `main`.
 
-Steps 1–2 hit fal ~420 times over a few minutes. `oas/` and `pages/` are cached
-on disk, so re-runs are cheap.
+Steps 01/09/02 hit fal roughly 1,000 times over 20–30 minutes at ≤3 concurrent
+requests. `oas/`, `pages/` and `pages_unlisted/` are cached on disk, so re-runs
+are cheap.
 
 ## Making it actually private
 
@@ -195,4 +239,4 @@ If the public URL isn't acceptable, the options are:
 
 ---
 
-Video data current as of **28 August 2026**; image and audio as of **18 August 2026**.
+Video, image and audio data current as of **14 October 2026**.

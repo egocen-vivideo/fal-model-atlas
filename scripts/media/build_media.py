@@ -15,24 +15,27 @@ sys.path.insert(0, HERE)
 from verdicts_media import IMAGE, AUDIO  # noqa: E402
 
 TABS = """<nav class="tabs" aria-label="Atlas sections">
-<a href="./"{v}>Video <span class="n">363</span></a>
-<a href="repurpose.html"{r}>Video repurpose <span class="n">213</span></a>
-<a href="image.html"{i}>Image <span class="n">587</span></a>
-<a href="audio.html"{a}>Audio <span class="n">126</span></a>
+<a href="./"{v}>Video <span class="n">{nv}</span></a>
+<a href="repurpose.html"{r}>Video repurpose <span class="n">{nr}</span></a>
+<a href="image.html"{i}>Image <span class="n">{ni}</span></a>
+<a href="audio.html"{a}>Audio <span class="n">{na}</span></a>
 </nav>"""
+
+AS_OF = '14 Oct 2026'
+COUNTS = {}
 
 
 def tabs(cur):
     m = {'v': '', 'r': '', 'i': '', 'a': ''}
     m[cur] = ' aria-current="page"'
-    return TABS.format(**m)
+    return TABS.format(**m, **COUNTS)
 
 
 CFG = {
  'image': {
    'title': 'fal.ai Image Model Atlas',
    'h1': 'Every image generation model on fal.ai',
-   'dek': 'All <b>587 endpoints</b> across text-to-image and image-to-image — generators, editors, upscalers, and utilities — with pricing normalised to <b>USD per image at 1&nbsp;MP</b> (1024&times;1024). Click any row for its strongest/weakest side and use-cases.',
+   'dek': 'All <b>__N__ endpoints</b> across text-to-image and image-to-image — generators, editors, upscalers, and utilities — with pricing normalised to <b>USD per image at 1&nbsp;MP</b> (1024&times;1024). Click any row for its strongest/weakest side and use-cases.',
    'verdicts': IMAGE,
    'types': {'t2i': ['b-t2v', 'T2I', 'Text→Image'], 'i2i': ['b-i2v', 'I2I', 'Image→Image'], 'both': ['b-ref', 'T2I+I2I', 'Text + Image input']},
    'tiers': [0.01, 0.03, 0.08, 0.2],
@@ -46,12 +49,12 @@ CFG = {
               ('max_mp', 'Max MP range', '0.1', 'rows without a size cap')],
    'footer': """<p><b>Method.</b> Endpoint list from fal's model index (categories text-to-image + image-to-image, all pages, de-duplicated). Size, aspect, mask, LoRA, reference and batch fields read from each endpoint's published <code>openapi.json</code>. Pricing from fal's pricing copy — model metadata where present, scraped from the model page otherwise.</p>
 <p><b>Read $/image as a 1&nbsp;MP rate.</b> fal bills images per image, per megapixel, per mode tier, or per token; everything is normalised to one 1024&times;1024 output (mid tier where modes exist; for editors that bill input + output, one 1&nbsp;MP input is assumed). Larger sizes scale roughly with megapixels. Token-billed models (GPT&nbsp;Image, some Gemini tiers) vary too much with settings for one number — they show as unpriced with the basis in the expanded row.</p>
-<p>83 legacy endpoints (SD/SDXL-era) are billed per GPU compute-second and show as compute-billed. <b>Sides and use-cases</b> are researched judgement per family, not benchmarks — shortlist, then test.</p>""",
+<p>__NC__ legacy endpoints (SD/SDXL-era) are billed per GPU compute-second and show as compute-billed. <b>Sides and use-cases</b> are researched judgement per family, not benchmarks — shortlist, then test.</p>""",
  },
  'audio': {
    'title': 'fal.ai Audio Model Atlas',
    'h1': 'Every audio generation model on fal.ai',
-   'dek': 'All <b>126 endpoints</b> across text-to-speech, music, SFX and audio-to-audio — with pricing normalised to <b>USD per minute of output</b>. Click any row for its strongest/weakest side and use-cases.',
+   'dek': 'All <b>__N__ endpoints</b> across text-to-speech, music, SFX and audio-to-audio — with pricing normalised to <b>USD per minute of output</b>. Click any row for its strongest/weakest side and use-cases.',
    'verdicts': AUDIO,
    'types': {'tts': ['b-t2v', 'TTS', 'Text→Speech'], 'music': ['b-i2v', 'MUSIC', 'Music generation'],
              'sfx': ['b-ref', 'SFX', 'Sound effects / ambient'], 'a2a': ['b-x4', 'A2A', 'Audio→Audio edit'],
@@ -80,7 +83,7 @@ def build_payload(rows, verdicts):
         if f not in fams:
             v = verdicts.get(f) or ('', '', '', '')
             fams[f] = list(v)
-    keep = ['id', 'family', 'lab', 'type', 'usd', 'basis', 'conf', 'desc',
+    keep = ['id', 'family', 'lab', 'type', 'usd', 'basis', 'conf', 'desc', 'status', 'status_note',
             'max_mp', 'size_opts', 'aspect', 'img_input', 'mask', 'lora', 'ref', 'batch',
             'max_dur', 'dur_opts', 'voices', 'langs', 'clone', 'lyrics', 'audio_in', 'formats']
     compact = [{k: r[k] for k in keep if k in r} for r in rows]
@@ -129,10 +132,14 @@ const capCell = v => !v ? '<span class="no">&mdash;</span>'
   : /^Yes/i.test(v) ? '<span class="yes">Yes</span>'
   : /^(Partial|Input)/i.test(v) ? `<span class="part">${esc(v)}</span>` : '<span class="no">No</span>';
 
+const STATUS_NAME = t => ({active:'Active (listed on fal)',unlisted:'Unlisted on fal (live)',deprecated:'Deprecated on fal',retiring:'Deprecation scheduled'})[t]||t;
+const statusBadge = r => r.status==='deprecated' ? ` <span class="badge stb st-dep" title="${esc(r.status_note)}">deprecated</span>`
+  : r.status==='retiring' ? ` <span class="badge stb st-ret" title="${esc(r.status_note)}">retiring</span>` : '';
 const FACETS=[
   {id:'fam', label:'Family', get:r=>[r.family], search:true},
   {id:'type', label:'Type', get:r=>[r.type], name:t=>(C.types[t]||[0,t,t])[2]},
   ...C.facets.map(([k,label])=>({id:k,label,get:r=>[/^Yes/.test(r[k]||'')?'y':'n'],name:t=>t==='y'?'Yes':'No',sort:(a,b)=>a<b?1:-1})),
+  {id:'stat', label:'fal status', get:r=>[r.status||'active'], name:STATUS_NAME},
 ];
 FACETS.forEach(f=>{
   const set=new Set(); rows.forEach(r=>f.get(r).forEach(t=>set.add(t)));
@@ -199,7 +206,7 @@ function match(r){
     if(lo!=null&&v<lo) return false;
     if(hi!=null&&v>hi) return false;
   }
-  if(st.q){ const h=(r.id+' '+r.family+' '+(r.lab||'')+' '+(r.desc||'')).toLowerCase();
+  if(st.q){ const h=(r.id+' '+r.family+' '+(r.lab||'')+' '+(r.desc||'')+' '+(r.status||'')).toLowerCase();
     if(!st.q.split(/\s+/).every(t=>h.includes(t))) return false; }
   return true;
 }
@@ -245,7 +252,7 @@ function render(){
     const t=C.types[r.type]||['b-t2v',r.type,r.type];
     const nv=r[C.num_key];
     html+=`<tr class="row" data-k="${ix}" tabindex="0" role="button" aria-expanded="false">
-      <td><span class="eid"><span class="pre">${esc(pre)}</span>${esc(tail)}</span></td>
+      <td><span class="eid"><span class="pre">${esc(pre)}</span>${esc(tail)}${statusBadge(r)}</span></td>
       <td><span class="badge ${t[0]}">${t[1]}</span></td>
       <td class="price">${money(r.usd)}</td>
       <td class="num">${nv==null?`<span class="dim">${esc(C.num_missing)}</span>`:esc(nv)+esc(C.num_suffix)}</td>
@@ -266,6 +273,7 @@ function toggle(tr){
     <div class="w"><h4>Weakest side</h4><p>${esc(v[1]||'—')}</p></div>
     <div class="us"><h4>Strongest use-cases</h4><p>${esc(v[2]||'—')}</p></div>
     <div class="uw"><h4>Weakest use-cases</h4><p>${esc(v[3]||'—')}</p></div>
+    ${r.status_note?`<div class="stnote st-${esc(r.status)}">${esc(r.status_note)}</div>`:''}
     <div class="meta"><span>${esc(r.basis||'no published rate')}</span>
       <a href="https://fal.ai/models/${r.id}" target="_blank" rel="noopener">open on fal.ai &nearr;</a></div></div></td>`;
   tr.after(d); tr.setAttribute('aria-expanded','true');
@@ -307,9 +315,9 @@ def page(name, rows, cfg, tab):
     js = JS.replace('__PAYLOAD__', json.dumps(payload, separators=(',', ':'))) \
            .replace('__CONFIG__', json.dumps(config, separators=(',', ':')))
     body = f"""<header class="top"><div class="wrap"><div class="mast">
-  <div class="eyebrow">fal.ai catalogue survey &middot; 18 Aug 2026</div>
+  <div class="eyebrow">fal.ai catalogue survey &middot; {AS_OF}</div>
   <h1>{cfg['h1']}</h1>
-  <p class="dek">{cfg['dek']}</p>
+  <p class="dek">{cfg['dek'].replace('__N__', str(len(rows)))}</p>
   {tab}
 </div>
 <div class="stats">{stats_html(rows, name)}</div>
@@ -329,7 +337,7 @@ def page(name, rows, cfg, tab):
 <thead><tr>{thead}</tr></thead>
 <tbody id="tb"></tbody>
 </table></div></div>
-<footer><div class="wrap">{cfg['footer']}</div></footer>
+<footer><div class="wrap">{cfg['footer'].replace('__NC__', str(sum(1 for r in rows if r.get('conf') == 'compute')))}</div></footer>
 """
     doc = f"""<!doctype html>
 <html lang="en">
@@ -359,17 +367,24 @@ CSV_COLS = {
  'image': [('id', 'Endpoint'), ('family', 'Family'), ('lab', 'Lab'), ('type', 'Type'),
            ('usd', 'USD/image @1MP'), ('basis', 'Price basis'), ('max_mp', 'Max MP'),
            ('size_opts', 'Size options'), ('aspect', 'Aspect ratios'), ('img_input', 'Image input?'),
-           ('mask', 'Mask/inpaint?'), ('lora', 'LoRA?'), ('ref', 'Style/ref?'), ('batch', 'Batch max')],
+           ('mask', 'Mask/inpaint?'), ('lora', 'LoRA?'), ('ref', 'Style/ref?'), ('batch', 'Batch max'),
+           ('status', 'fal status')],
  'audio': [('id', 'Endpoint'), ('family', 'Family'), ('lab', 'Lab'), ('type', 'Type'),
            ('usd', 'USD/min output'), ('basis', 'Price basis'), ('max_dur', 'Max duration s'),
            ('dur_opts', 'Duration options'), ('voices', 'Voices'), ('langs', 'Languages'),
            ('clone', 'Voice clone?'), ('lyrics', 'Lyrics?'), ('audio_in', 'Audio input?'),
-           ('formats', 'Output formats')],
+           ('formats', 'Output formats'), ('status', 'fal status')],
 }
 
 
 def main():
     rows_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'data')
+    vid = json.load(open(os.path.join(ROOT, 'data', 'models.json')))
+    COUNTS.update(
+        nv=sum(1 for r in vid if r.get('f_task', 'generate') == 'generate'),
+        nr=sum(1 for r in vid if r.get('f_task', 'generate') != 'generate'),
+        ni=len(json.load(open(os.path.join(rows_dir, 'image_rows.json')))),
+        na=len(json.load(open(os.path.join(rows_dir, 'audio_rows.json')))))
     for name, tab_key in (('image', 'i'), ('audio', 'a')):
         rows = json.load(open(os.path.join(rows_dir, f'{name}_rows.json')))
         # persist rows + CSV into repo data/

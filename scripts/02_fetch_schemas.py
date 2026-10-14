@@ -4,8 +4,10 @@ The queue OpenAPI schema is the source of truth for duration / resolution /
 aspect-ratio / frame-count / audio / start-end-frame parameters. A handful of
 endpoints have no published schema (404) — those fall back to the model page.
 
-Only text-to-video and image-to-video are kept; video-to-video was fetched in
-step 1 purely to catch reference-to-video models filed under it.
+All three video categories are kept (video-to-video feeds the repurpose tab
+since Aug 2026). Concurrency is 3, not 12: fal rate-limits the OpenAPI
+endpoint and answers false 404s under load (see 09_unlisted.py). Schemas that
+09 already fetched for unlisted endpoints are reused from oas/.
 
 Writes: oas/<escaped_id>.json  and  pages/<escaped_id>.html
         page_pricing.json  { endpoint_id: [pricing paragraphs] }
@@ -15,6 +17,7 @@ import html
 import json
 import os
 import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -87,18 +90,21 @@ def main():
     os.makedirs(PAGE_DIR, exist_ok=True)
     catalog = json.load(open('all_video_models.json'))
     ids = [k for k, v in catalog.items()
-           if v['category'] in ('text-to-video', 'image-to-video')]
-    print(f'{len(ids)} generation endpoints')
+           if v['category'] in ('text-to-video', 'image-to-video', 'video-to-video')]
+    print(f'{len(ids)} video endpoints')
 
-    with cf.ThreadPoolExecutor(12) as ex:
-        for eid, status in ex.map(get_schema, ids):
-            if status.startswith('ERR'):
-                print(' schema miss:', eid, status)
+    with cf.ThreadPoolExecutor(3) as ex:
+        miss = [eid for eid, status in ex.map(get_schema, ids) if status.startswith('ERR')]
+    for eid in miss:                       # slow retry before believing a miss
+        time.sleep(1.5)
+        eid, status = get_schema(eid)
+        if status.startswith('ERR'):
+            print(' schema miss:', eid, status)
 
     # model pages are only needed where fal's metadata carries no pricing copy
     need = [k for k in ids if not (catalog[k].get('pricingInfoOverride') or '').strip()]
     print(f'{len(need)} endpoints need page-scraped pricing')
-    with cf.ThreadPoolExecutor(8) as ex:
+    with cf.ThreadPoolExecutor(4) as ex:
         for eid, status in ex.map(get_page, need):
             if status.startswith('ERR'):
                 print(' page miss:', eid, status)

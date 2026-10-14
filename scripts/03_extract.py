@@ -78,7 +78,7 @@ def parse_price(txt, meta):
 
 rows = []
 for eid, meta in CAT.items():
-    if meta['category'] not in ('text-to-video', 'image-to-video'): continue
+    if meta['category'] not in ('text-to-video', 'image-to-video', 'video-to-video'): continue
     p = os.path.join('oas', safe(eid))
     props, about = {}, ''
     if os.path.exists(p):
@@ -108,6 +108,10 @@ for eid, meta in CAT.items():
         'lab': meta.get('modelLab'),
         'family': meta.get('modelFamily'),
         'category': meta['category'],
+        'category_src': meta.get('category_src') or meta['category'],
+        'unlisted': bool(meta.get('_unlisted')),
+        'fal_status': meta.get('_page_status') or meta.get('status') or '',
+        'fal_deprecated': bool(meta.get('deprecated')),
         'is_ref': 'reference' in eid or 'reference-to-video' in tags or 'subject-reference' in eid,
         'tags': tags,
         'desc': (meta.get('shortDescription') or '').strip(),

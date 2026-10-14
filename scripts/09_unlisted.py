@@ -1,312 +1,308 @@
-"""Step 9 — add fal endpoints that are live but absent from fal's model index.
+"""Step 9 — find fal video endpoints that are live but absent from the model index.
 
-fal's /api/models index (step 01) does not return every deployed endpoint.
-Some ship with a model page and a queue OpenAPI schema but never appear in the
-index — H3-Max, Wan 3.0, Gemini Omni Flash v1.1 among them. A few have a schema
-and no page at all.
+Runs right after 01 (it appends to all_video_models.json, so every later step
+treats unlisted endpoints exactly like listed ones — same schema extraction,
+same price engine, same fields, families and verdicts).
 
-Discovery vector is fal's own sitemap (https://fal.ai/sitemap-0.xml), which
-lists every model page including unlisted ones; each candidate is then
-confirmed live by fetching its queue OpenAPI schema.
+fal's /api/models index (step 01) does not return every deployed endpoint:
+- endpoints fal marks `status: unlisted` (e.g. the whole Veo 3.1 family since
+  Sep 2026) are callable and have a model page, but never appear in the index;
+- endpoints fal marks `deprecated: true` (Kling 1.x/2.0/2.1, Luma Ray 2, LTX-2
+  19B...) drop out of the index while still being callable;
+- a few endpoints have a queue OpenAPI schema and no public page at all.
+
+Discovery vectors (fal's sitemap no longer lists unlisted pages — it is now a
+single sitemap.xml that mirrors the index, and sitemap-0.xml is gone):
+  1. every endpoint the atlas carried before (../data/models.json) that today's
+     index no longer returns;
+  2. sibling probes: for the families in SIBLING_FAMILIES, every listed
+     endpoint's base path x the standard mode suffixes (+ /lora);
+  3. model records embedded in the pages fetched here (a model page carries the
+     records of its family siblings, unlisted ones included).
+Each candidate is confirmed live by fetching its queue OpenAPI schema; its model
+page is then read for the embedded model record (title, category, pricing copy,
+status, deprecated flag). Candidates whose schema 404s are dead.
+
+The page also carries fal's `endpoint_messages` list — scheduled deprecation
+notices ("This endpoint will be deprecated on November 17, 2026") keyed by exact
+id or id prefix. Those are written to endpoint_messages.json and applied as row
+status by 08.
 
 NOTE ON RATE LIMITING: fal throttles the OpenAPI endpoint. Probing 8k+
-candidates at 24 threads produced ~100% false 404s. Keep concurrency <= 4 with
-backoff, or every result is a lie.
+candidates at 24 threads produced ~100% false 404s (Aug 2026). Concurrency is
+capped at 3 with backoff, and every 404 is re-probed once, slowly, before it
+is believed.
 
-Reads:  <work>/oas_unlisted/*.json, <work>/unlisted_pricing.json
-Writes: merges rows into ../data/models.json
-Usage:  python3 09_unlisted.py <work_dir>
+Reads:  all_video_models.json (from 01), ../data/models.json
+Writes: all_video_models.json (unlisted records appended, `_unlisted: true`),
+        oas/<id>.json (schemas, reused by 02), unlisted_report.json,
+        endpoint_messages.json
+Usage:  python3 09_unlisted.py
 """
+import concurrent.futures as cf
 import json
 import os
 import re
-import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-MP720 = 1280 * 720 / 1e6
+UA = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
+OAS_DIR = 'oas'
+PAGE_DIR = 'pages_unlisted'
 
-# Endpoints whose page 404s (schema-only). Pricing inherited from the sibling
-# the endpoint is built on, flagged 'est' in price_conf.
-INHERITED = {
-    'blackforestlabs/flux-3/edit-video': (10.20, '$0.17/s @720p x 60s (FLUX.3 video tier; endpoint has no public page)'),
-    'minimax/h3-max/text-to-video/lora': (3.00, '$0.04/s @768p x 1.25 LoRA uplift x 60s (mirrors H3 base->lora ratio)'),
-    'minimax/h3-max/image-to-video/lora': (3.00, '$0.04/s @768p x 1.25 LoRA uplift x 60s (mirrors H3 base->lora ratio)'),
-    'openrouter/router/video': (None, 'per-token, varies by routed model'),
-    'openrouter/router/video/enterprise': (None, 'per-token, varies by routed model'),
-}
-
-FAMILIES = [
-    (r'wan-3\.0-prime', 'Wan 3.0 Prime'), (r'wan-3\.0', 'Wan 3.0'),
-    (r'h3-max', 'MiniMax H3-Max'), (r'minimax/h3', 'MiniMax H3'),
-    (r'gemini-omni-flash', 'Gemini Omni Flash'),
-    (r'ltx-2\.5', 'LTX-2.5'), (r'ltx-2\.3', 'LTX-2.3'), (r'ltx-2-19b', 'LTX-2 19B'),
-    (r'flux-3', 'FLUX.3 Video'),
-    (r'longcat-single-avatar', 'LongCat Avatar'),
-    (r'flashtalk|latentsync', 'Talking-head (legacy)'),
-    (r'argil', 'Argil'), (r'veed', 'VEED'),
-    (r'kling-video', 'Kling Audio'),
-    (r'mirelo', 'Mirelo SFX'), (r'sonilo', 'Sonilo'),
-    (r'bria/video', 'Video background/erase'),
-    (r'sa2va|video-understanding|nemotron|openrouter', 'Video understanding'),
-    (r'omnilottie', 'OmniLottie'),
-    (r'workflow-utilities|ffmpeg', 'Video utilities'),
+MODES = ['text-to-video', 'image-to-video', 'reference-to-video',
+         'first-last-frame-to-video', 'start-end-to-video', 'extend-video',
+         'video-to-video', 'edit-video', 'audio-to-video']
+# families whose sibling paths are worth probing (recent / fast-moving lines)
+SIBLING_FAMILIES = [
+    r'^fal-ai/veo3', r'^google/', r'^minimax/h3', r'^bytedance/seedance-2',
+    r'^fal-ai/kling-video/(v3|o3)', r'^alibaba/', r'^fal-ai/vidu/q[34]',
+    r'^luma/', r'^fal-ai/pixverse/(v6|c1)', r'^xai/', r'^lightricks/',
+    r'^fal-ai/kandinsky6', r'^blackforestlabs/', r'^fal-ai/ltx-2\.3',
 ]
-
-# family -> (strong side, weak side, strong use-cases, weak use-cases)
-NEW_VERDICTS = {
- 'Wan 3.0': ("Alibaba's third generation: t2v, i2v with optional last frame, and a reference mode that accepts images, video, audio, a document or a web page as conditioning — the widest input surface of any open-lineage family.",
-             "480p/720p/1080p only (no 4K); brand-new, so community tooling and LoRAs still target 2.2.",
-             "General-purpose scene generation where one family must cover text, image, keyframe and reference modes; document- or page-driven explainer video.",
-             "4K masters, workflows that depend on the mature Wan 2.2 LoRA ecosystem."),
- 'Wan 3.0 Prime': ("The quality tier of Wan 3.0 — same four input modes at a ~40% premium, tuned for fidelity.",
-                   "$8.40/min at 720p puts it above Kling O3 Pro with less independent evaluation behind it.",
-                   "Hero shots inside a Wan-3.0 pipeline where the base tier's fidelity falls short.",
-                   "Volume work — the base tier is a third cheaper for the same feature set."),
- 'MiniMax H3-Max': ("Post-trained H3 at half the price of base H3 ($2.40/min vs $4.80 at 768p): 5–15s continuous duration, six aspect ratios, prompt_expansion_mode, LoRA variants, and end_image_url on i2v so it does keyframes too.",
-                    "Caps at 768P — the 2K/4K tiers of base H3 are gone, and it has no reference-to-video endpoint of its own (use minimax/h3/reference-to-video/lora).",
-                    "The value pick for high-volume generation with keyframe control; batch work needing consistent style via LoRA.",
-                    "2K/4K delivery, reference-driven scenes without falling back to the H3 base family."),
- 'LongCat Avatar': ("Audio-driven talking avatars with and without a reference image — the no-image mode invents a consistent presenter from the prompt alone.",
-                    "$18/min at 720p is steep for avatar work; young model with little independent evaluation.",
-                    "Presenter video when no avatar asset exists yet; quick talking-head drafts from a voice track.",
-                    "Volume avatar production (VEED and Kling Avatar are far cheaper)."),
- 'Video understanding': ("Video-in, text-out analysis (SA2VA 4B/8B, fal's video-understanding, Nemotron omni, OpenRouter's video router) — captioning, QA and description over a clip.",
-                         "Produces text, not video; per-second or per-token billing makes long clips costly.",
-                         "Auto-tagging generated footage, QC checks, building prompts from reference video, accessibility descriptions.",
-                         "Any generation or editing task."),
- 'Kling Audio': ("Extracts or generates the audio track for a Kling clip at a flat $0.035 per video.",
-                 "Extraction only — it does not compose new music or design sound.",
-                 "Pulling the native audio out of a Kling generation for separate editing.",
-                 "Sound design or scoring (use a dedicated video-to-audio model)."),
- 'OmniLottie': ("Converts video into a Lottie JSON animation — vector output that scales and stays tiny.",
-                "Only suits graphic, flat-motion source; photoreal footage will not vectorise usefully.",
-                "Turning generated motion-graphics into lightweight web/app animations.",
-                "Photoreal video, anything needing pixel fidelity."),
-}
+# extra hand-named candidates (announced or previously seen, cheap to check)
+EXTRA_CANDIDATES = [
+    'fal-ai/veo3.1/lite/reference-to-video', 'fal-ai/veo3.1/lite/extend-video',
+    'fal-ai/veo3', 'fal-ai/veo3/fast', 'fal-ai/veo3/image-to-video',
+    'fal-ai/sora-2/text-to-video', 'fal-ai/sora-2/image-to-video',
+    'fal-ai/sora-2/text-to-video/pro', 'fal-ai/sora-2/image-to-video/pro',
+    'fal-ai/sora-2/video-to-video/remix',
+]
+EXTRA_CATS = {'audio-to-video': 'image-to-video', 'video-to-audio': 'video-to-video',
+              'video-to-text': 'video-to-video', 'vision': 'video-to-video'}
 
 
-def schema_input(d):
-    sch = (d.get('components') or {}).get('schemas') or {}
-    cands = [(k, v) for k, v in sch.items()
-             if k not in ('QueueStatus', 'File', 'ValidationError', 'HTTPValidationError')
-             and not k.endswith(('Output', 'Response')) and 'properties' in v]
-    if not cands:
-        return {}
-    for k, v in cands:
-        if 'Input' in k:
-            return v
-    return cands[0][1]
+def esc(eid):
+    return eid.replace('/', '__')
 
 
-def enum_of(p):
-    if not isinstance(p, dict):
-        return None
-    if p.get('enum'):
-        return p['enum']
-    for key in ('anyOf', 'oneOf', 'allOf'):
-        for sub in p.get(key) or []:
-            if isinstance(sub, dict) and sub.get('enum'):
-                return sub['enum']
+def http(url, timeout=60):
+    req = urllib.request.Request(url, headers=UA)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, b''
+    except Exception:
+        return 0, b''
+
+
+def probe_schema(eid, slow=False):
+    """-> True (live, cached), False (404), None (inconclusive)."""
+    path = os.path.join(OAS_DIR, esc(eid) + '.json')
+    if os.path.exists(path) and os.path.getsize(path) > 200:
+        return True
+    url = 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=' + urllib.parse.quote(eid, safe='')
+    for attempt in range(4):
+        time.sleep(1.5 if slow else 0.25)
+        code, raw = http(url)
+        if code == 200:
+            try:
+                d = json.loads(raw)
+            except Exception:
+                return None
+            if not (isinstance(d, dict) and d.get('paths')):
+                return False
+            with open(path, 'wb') as f:
+                f.write(raw)
+            return True
+        if code == 404:
+            return False
+        time.sleep(2 * (attempt + 1))       # 429 / 5xx / network: back off
     return None
 
 
-def numrange(p):
-    if not isinstance(p, dict):
-        return (None, None)
-    lo, hi = p.get('minimum'), p.get('maximum')
-    for key in ('anyOf', 'oneOf'):
-        for sub in p.get(key) or []:
-            if isinstance(sub, dict):
-                lo = lo if lo is not None else sub.get('minimum')
-                hi = hi if hi is not None else sub.get('maximum')
-    return (lo, hi)
+def get_page(eid):
+    path = os.path.join(PAGE_DIR, esc(eid) + '.html')
+    if os.path.exists(path) and os.path.getsize(path) > 50_000:
+        return open(path, encoding='utf-8', errors='ignore').read()
+    time.sleep(0.3)
+    code, raw = http('https://fal.ai/models/' + eid, timeout=90)
+    if code != 200:
+        return ''
+    with open(path, 'wb') as f:
+        f.write(raw)
+    return raw.decode('utf-8', errors='ignore')
 
 
-def price(eid, txt):
-    """-> (usd_per_min_720p, basis, conf)"""
-    if eid in INHERITED:
-        v, b = INHERITED[eid]
-        return v, b, 'est' if v else 'token'
-    t = (txt or '').replace('**', '')
-    if not t:
-        return None, '', 'none'
-    if 'per compute second' in t.lower():
-        return None, 'billed per GPU compute-second', 'compute'
-    # per-megapixel of generated data (LTX)
-    m = re.search(r'\$([0-9.]+)\s*per megapixel', t, re.I)
-    if m:
-        mp = float(m.group(1))
-        return mp * MP720 * 25 * 60, f"${mp}/MP x 0.9216 MP/frame x 25fps x 60s", 'calc'
-    # explicit 720p per-second, several phrasings
-    for pat in (r'for 720p,?\s*\$([0-9.]+)\s*per second',
-                r'\$([0-9.]+)\s+720p\b',
-                r'\$([0-9.]+)\s*(?:at|for)\s*720p',
-                r'\$([0-9.]+)\s*per second at 720p',
-                r'\$([0-9.]+)\s*per video second for 720p'):
-        m = re.search(pat, t, re.I)
-        if m:
-            v = float(m.group(1))
-            return v * 60, f"${v}/s @720p x 60s", 'exact'
-    # 768p tier (H3 family tops out there)
-    m = re.search(r'\$([0-9.]+)\s*per second at 768p', t, re.I)
-    if m:
-        v = float(m.group(1))
-        return v * 60, f"${v}/s @768p x 60s (768P is the top tier)", 'exact'
-    # generic per-second / per-minute / per-N-seconds
-    m = re.search(r'\$([0-9.]+)\s*per (?:input |output )?second', t, re.I)
-    if m:
-        v = float(m.group(1))
-        return v * 60, f"${v}/s x 60s", 'exact'
-    m = re.search(r'\$([0-9.]+)\s*per minute', t, re.I)
-    if m:
-        return float(m.group(1)), f"${m.group(1)}/min", 'exact'
-    m = re.search(r'\$([0-9.]+)\s*per\s*(\d+)\s*second', t, re.I)
-    if m:
-        v, n = float(m.group(1)), float(m.group(2))
-        return v * 60 / n, f"${v} per {n:g}s -> x60", 'exact'
-    m = re.search(r'\$([0-9.]+)\s*per second of output and per sample', t, re.I)
-    if m:
-        return float(m.group(1)) * 60, f"${m.group(1)}/s/sample x 60s", 'exact'
-    m = re.search(r'\$([0-9.]+)\s*per video', t, re.I)
-    if m:
-        return float(m.group(1)) * 12, f"${m.group(1)} per video -> x60 assuming 5s clips", 'est'
-    if 'token' in t.lower():
-        return None, 'token-based', 'token'
-    return None, '', 'none'
+def _json_object_at(s, i):
+    """Parse the JSON object starting at s[i] == '{' by brace matching."""
+    depth, j, in_str, escp = 0, i, False, False
+    while j < len(s):
+        c = s[j]
+        if in_str:
+            if escp:
+                escp = False
+            elif c == '\\':
+                escp = True
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return json.loads(s[i:j + 1])
+        j += 1
+    return None
 
 
-def classify(eid, cat, props):
-    """-> (category, is_ref, f_task)"""
-    if re.search(r'audio-to-video', eid):
-        return 'image-to-video', False, 'generate'
-    if re.search(r'video-to-audio|video-to-sound|/sfx', eid):
-        return 'video-to-video', False, 'video→audio'
-    if re.search(r'sa2va|video-understanding|nemotron|openrouter', eid):
-        return 'video-to-video', False, 'analysis/masking'
-    if re.search(r'video-to-lottie|interleave-video', eid):
-        return 'video-to-video', False, 'utility'
-    if re.search(r'despill|background-removal', eid):
-        return 'video-to-video', False, 'inpaint/erase'
-    if re.search(r'edit-video', eid):
-        return 'video-to-video', False, 'edit/restyle'
-    if 'reference-to-video' in eid:
-        return 'image-to-video', True, 'generate'
-    if cat == 'text-to-video':
-        return 'text-to-video', False, 'generate'
-    return 'image-to-video', False, 'generate'
+def unescape_flight(html_text):
+    """Model data sits in Next.js flight strings: JSON with escaped quotes."""
+    return html_text.replace('\\\\', '\x00').replace('\\"', '"').replace('\x00', '\\')
 
 
-def build(work):
-    oas = os.path.join(work, 'oas_unlisted')
-    pricing = json.load(open(os.path.join(work, 'unlisted_pricing.json')))
-    ids = json.load(open(os.path.join(work, 'unlisted_video.json')))
-    ids = sorted(set(ids) | set(INHERITED))
-    rows = []
-    for eid in ids:
-        p = os.path.join(oas, eid.replace('/', '__') + '.json')
-        if not os.path.exists(p):
+def page_record(eid, page):
+    """The page's own model record (same shape as an /api/models item)."""
+    s = unescape_flight(page)
+    k = s.find(f'"endpointId":"{eid}","model":{{')
+    if k < 0:
+        return None
+    try:
+        return _json_object_at(s, s.index('{', k + len(f'"endpointId":"{eid}","model":')))
+    except Exception:
+        return None
+
+
+def embedded_ids(page):
+    s = unescape_flight(page)
+    return set(re.findall(r'"id":"([a-z0-9][\w.\-]*/[\w.\-/]+)","modelId"', s))
+
+
+def endpoint_messages(page):
+    s = unescape_flight(page)
+    k = s.find('"endpoint_messages":[')
+    if k < 0:
+        return None
+    i = s.index('[', k)
+    out = []
+    for m in re.finditer(r'"rule":"(exact_match|starts_with)","type":"(\w+)","value":"([^"]+)","message":"([^"]+)"',
+                         s[i:i + 20000]):
+        out.append({'rule': m.group(1), 'type': m.group(2), 'value': m.group(3), 'message': m.group(4)})
+    return out
+
+
+def sibling_candidates(catalog_ids):
+    out = set()
+    for eid in catalog_ids:
+        if not any(re.search(p, eid) for p in SIBLING_FAMILIES):
             continue
-        d = json.load(open(p))
-        meta = (d.get('info') or {}).get('x-fal-metadata') or {}
-        props = schema_input(d).get('properties', {}) or {}
-        about = (meta.get('about') or '').strip()
-        cat, is_ref, task = classify(eid, meta.get('category') or '', props)
-        usd, basis, conf = price(eid, pricing.get(eid, ''))
-
-        dur = props.get('duration') or {}
-        de = enum_of(dur)
-        dlo, dhi = numrange(dur)
-        nlo, nhi = numrange(props.get('num_frames') or {})
-        fps = (props.get('fps') or {}).get('default') or 24
-        res_e = enum_of(props.get('resolution') or {})
-        ar_e = enum_of(props.get('aspect_ratio') or {})
-        start = [k for k in ('image_url', 'start_image_url', 'first_image_url', 'image_urls',
-                             'reference_image_urls', 'input_image_urls') if k in props]
-        end = [k for k in ('end_image_url', 'last_frame_url', 'tail_image_url') if k in props]
-        aud = [k for k in ('generate_audio', 'audio_url', 'audio_urls', 'reference_audio_urls',
-                           'voice', 'voice_id') if k in props]
-
-        if de:
-            f_dur = ', '.join(str(x) for x in de) + ' s'
-            mx = max((float(re.sub(r'[^0-9.]', '', str(x)) or 0) for x in de), default=None)
-        elif dlo is not None or dhi is not None:
-            f_dur = f"{dlo}–{dhi} s continuous"
-            mx = dhi
-        elif nhi:
-            f_dur = f"{(nlo or 1)/fps:.1f}–{nhi/fps:.1f} s via num_frames"
-            mx = nhi / fps
-        else:
-            f_dur = 'follows input length' if task != 'generate' else 'not exposed'
-            mx = None
-        maxf = int(round(mx * fps)) if mx else (int(nhi) if nhi else None)
-
-        fam = next((n for pat, n in FAMILIES if re.search(pat, eid)), 'Unlisted misc')
-        is_audio_driven = 'audio-to-video' in eid
-        rows.append({
-            'id': eid, 'title': meta.get('title') or '', 'lab': meta.get('modelLab') or '',
-            'category': cat, 'is_ref': is_ref, 'tags': [], 'desc': about[:200],
-            'about': about[:1500], 'pricing_raw': '', 'price': {}, 'machineType': None,
-            'price_text': pricing.get(eid, ''), 'price_basis': basis, 'price_conf': conf,
-            'price_src': 'model page (unlisted)' if pricing.get(eid) else 'sibling endpoint',
-            'usd_per_min_720p': round(usd, 2) if usd else None,
-            'duration_enum': de, 'duration_min': dlo, 'duration_max': dhi,
-            'duration_default': dur.get('default'),
-            'res_enum': res_e, 'res_default': (props.get('resolution') or {}).get('default'),
-            'ar_enum': ar_e,
-            'num_frames_min': nlo, 'num_frames_max': nhi, 'num_frames_default': None,
-            'fps_enum': None, 'fps_min': None, 'fps_max': None, 'fps_default': fps,
-            'has_audio_field': aud, 'start_keys': start, 'end_keys': end,
-            'multi_keys': [k for k in ('multi_prompt', 'shot_type', 'keyframes', 'elements') if k in props],
-            'lip_keys': [k for k in ('audio_url', 'voice', 'text') if k in props],
-            'lipsync_tag': bool(re.search(r'avatar|talk|lipsync|flashtalk', eid)),
-            'all_props': sorted(props.keys()), 'has_schema': True,
-            'family': fam, 'family_key': fam, 'f_task': task,
-            'f_duration': f_dur, 'f_maxframes': maxf,
-            'f_maxframes_basis': 'from schema' if maxf else 'driven by input length',
-            'f_quality': ', '.join(str(x) for x in res_e) if res_e else 'fixed',
-            'f_aspect': ', '.join(str(x) for x in ar_e) if ar_e else (
-                'inherits input' if cat != 'text-to-video' else 'fixed'),
-            'f_audio': ('Yes — native generation' if 'generate_audio' in props else
-                        'Input only (drives lipsync)' if aud else 'No'),
-            'f_start': ('Yes (multi-image / reference)' if is_ref else
-                        'Yes' if start else
-                        'No (text-only)' if cat == 'text-to-video' else 'No'),
-            'f_end': 'Yes' if end else 'No',
-            'f_multicut': 'No — single shot',
-            'f_lipsync': ('Yes — dedicated lipsync/avatar model'
-                          if re.search(r'avatar|talk|lipsync', eid)
-                          else 'Partial — audio input, no explicit lipsync claim'
-                          if is_audio_driven else 'No'),
-        })
-    return rows
+        segs = eid.split('/')
+        cut = next((i for i, s in enumerate(segs) if s in MODES), None)
+        if cut is None:
+            continue
+        base = '/'.join(segs[:cut])
+        for mode in MODES[:6]:
+            out.add(f'{base}/{mode}')
+            out.add(f'{base}/{mode}/lora')
+    return out
 
 
 def main():
-    work = sys.argv[1]
-    new = build(work)
-    path = os.path.join(ROOT, 'data', 'models.json')
-    rows = json.load(open(path))
-    have = {r['id'] for r in rows}
-    add = [r for r in new if r['id'] not in have]
+    os.makedirs(OAS_DIR, exist_ok=True)
+    os.makedirs(PAGE_DIR, exist_ok=True)
+    catalog = json.load(open('all_video_models.json'))
+    listed = set(catalog)
 
-    # verdicts: new families defined here, existing families inherit
-    inherit = {}
-    for r in rows:
-        inherit.setdefault(r['family_key'], (r['f_strong'], r['f_weak'],
-                                             r.get('f_use_strong', ''), r.get('f_use_weak', '')))
-    for r in add:
-        v = NEW_VERDICTS.get(r['family_key']) or inherit.get(r['family_key']) or ('', '', '', '')
-        r['f_strong'], r['f_weak'], r['f_use_strong'], r['f_use_weak'] = v
+    prev_path = os.path.join(ROOT, 'data', 'models.json')
+    prev_rows = {r['id']: r for r in json.load(open(prev_path))} if os.path.exists(prev_path) else {}
+    prev = set(prev_rows)
 
-    merged = rows + add
-    json.dump(merged, open(path, 'w'), indent=1)
-    print(f'added {len(add)} unlisted endpoints -> {len(merged)} total')
-    import collections
-    print('by task:', dict(collections.Counter(r['f_task'] for r in add)))
-    missing = [r['id'] for r in add if not r['f_strong']]
-    if missing:
-        print('WARNING no verdict:', missing)
+    cands = (prev - listed) | (sibling_candidates(listed) - listed) | (set(EXTRA_CANDIDATES) - listed)
+    print(f'candidates: {len(cands)} (previously carried {len(prev - listed)}, '
+          f'siblings {len(sibling_candidates(listed) - listed)})')
+
+    live, dead, unsure = set(), set(), set()
+
+    def run_probe(ids, slow=False, threads=3):
+        res = {}
+        with cf.ThreadPoolExecutor(threads) as ex:
+            for n, (eid, ok) in enumerate(zip(ids, ex.map(lambda e: probe_schema(e, slow), ids)), 1):
+                res[eid] = ok
+                if n % 50 == 0:
+                    print(f'  probed {n}/{len(ids)}', flush=True)
+        return res
+
+    todo = sorted(cands)
+    seen = set()
+    rounds = 0
+    while todo and rounds < 3:
+        rounds += 1
+        seen |= set(todo)
+        res = run_probe(todo)
+        # never trust a first 404 for an endpoint we know existed (or was named);
+        # sibling guesses are mostly genuinely absent, so only retry inconclusives
+        retry = [e for e, ok in res.items()
+                 if ok is None or (ok is False and (e in prev or e in EXTRA_CANDIDATES))]
+        if retry:
+            res.update(run_probe(retry, slow=True, threads=1))
+        for e, ok in res.items():
+            (live if ok else dead if ok is False else unsure).add(e)
+        # harvest sibling records embedded in the pages of live candidates
+        more = set()
+        for e in sorted(e for e, ok in res.items() if ok):
+            more |= embedded_ids(get_page(e))
+        todo = sorted(x for x in more - listed - seen
+                      if re.search(r'video|veo|kling|seedance|h3|wan|ltx|vidu|ray|pixverse|grok|sora', x))
+        print(flush=True)
+        print(f'round {rounds}: live {len(live)}, dead {len(dead)}, unsure {len(unsure)}, '
+              f'new from pages {len(todo)}')
+
+    added, report = 0, {'live': [], 'dead': sorted(dead), 'unsure': sorted(unsure)}
+    msgs = None
+    for eid in sorted(live):
+        page = get_page(eid)
+        if msgs is None and page:
+            msgs = endpoint_messages(page)
+        rec = page_record(eid, page) if page else None
+        oas = json.load(open(os.path.join(OAS_DIR, esc(eid) + '.json')))
+        meta = (oas.get('info') or {}).get('x-fal-metadata') or {}
+        if rec:
+            if rec.get('removed'):
+                report['dead'].append(eid)
+                continue
+            item = rec
+        else:
+            item = {'id': eid, 'title': meta.get('title') or eid.split('/')[-1],
+                    'category': meta.get('category') or '', 'shortDescription': '',
+                    'pricingInfoOverride': '', 'modelLab': meta.get('modelLab') or '',
+                    'modelFamily': '', 'tags': [], 'machineType': None,
+                    'status': 'schema-only', 'deprecated': False}
+        cat = item.get('category') or ''
+        item['category_src'] = cat
+        if eid in prev_rows:                # keep the category earlier passes curated
+            item['category'] = prev_rows[eid]['category']
+        elif cat not in ('text-to-video', 'image-to-video', 'video-to-video'):
+            item['category'] = EXTRA_CATS.get(cat) or (
+                'video-to-video' if re.search(r'video-to-|edit|extend|upscale', eid)
+                else 'text-to-video' if 'text-to-video' in eid else 'image-to-video')
+        if (item.get('pricingInfoOverride') or '').strip() in ('$undefined', 'undefined'):
+            item['pricingInfoOverride'] = ''     # page renders pricing itself; 02 scrapes it
+        item['_unlisted'] = True
+        item['_page_status'] = item.get('status') or ('schema-only' if not rec else '')
+        catalog[eid] = item
+        added += 1
+        report['live'].append({'id': eid, 'status': item['_page_status'],
+                               'deprecated': bool(item.get('deprecated')),
+                               'category': item['category']})
+
+    if msgs is None:                       # no unlisted page fetched: read any listed page
+        for eid in sorted(listed)[:3]:
+            msgs = endpoint_messages(get_page(eid))
+            if msgs:
+                break
+    json.dump(msgs or [], open('endpoint_messages.json', 'w'), indent=1)
+    json.dump(catalog, open('all_video_models.json', 'w'), indent=1)
+    json.dump(report, open('unlisted_report.json', 'w'), indent=1)
+    print(f'appended {added} unlisted endpoints -> {len(catalog)} in catalog')
+    print(f'deprecation notices: {len(msgs or [])}')
+    print('dead (schema 404):', len(report['dead']), '| inconclusive:', len(unsure))
 
 
 if __name__ == '__main__':
